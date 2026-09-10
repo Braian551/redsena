@@ -57,14 +57,19 @@ redsena/
 │       ├── src/
 │       │   ├── main/
 │       │   │   ├── java/com/redsena/demo/
-│       │   │   │   └── DemoApplication.java
+│       │   │   │   ├── config/ security/ shared/
+│       │   │   │   ├── users/ posts/ comments/
+│       │   │   │   └── likes/ feed/ media/
 │       │   │   └── resources/
+│       │   │       ├── db/migration/
+│       │   │       ├── graphql/
 │       │   │       └── application.properties
-│       │   └── test/
-│       │       └── java/com/redsena/demo/
-│       │           ├── DemoApplicationTests.java
-│       │           ├── TestDemoApplication.java
-│       │           └── TestcontainersConfiguration.java
+│       │   └── test/java/com/redsena/demo/
+│       │       ├── DemoApplicationTests.java
+│       │       ├── SocialGraphQlIntegrationTests.java
+│       │       └── TestcontainersConfiguration.java
+│       ├── docker/
+│       ├── Dockerfile / .dockerignore
 │       ├── compose.yaml
 │       ├── pom.xml
 │       ├── mvnw
@@ -80,6 +85,7 @@ redsena/
 │       │   ├── App.jsx
 │       │   ├── index.css
 │       │   └── main.jsx
+│       ├── Dockerfile / nginx.conf
 │       ├── package.json
 │       ├── package-lock.json
 │       └── vite.config.js
@@ -87,7 +93,11 @@ redsena/
 └── CLAUDE.md
 ```
 
-Actualmente existe una base Spring Boot con Testcontainers y un frontend React + Vite.
+Estado validado en septiembre de 2026: el backend mantiene el monolito modular Spring Boot con PostgreSQL/Flyway, Redis para caché e idempotencia, GraphQL, seguridad Bearer/Firebase opcional, uploads multipart y Actuator. El frontend React/Vite consume el feed GraphQL después del registro/login Firebase, crea posts con imágenes, usa likes explícitos y se empaqueta en Nginx. El Compose integrado orquesta backend, frontend, media, Nginx, PostgreSQL y Redis con red, health checks y volumen persistente de uploads. El caché de vistas que contiene `likedByViewer` se separa por el `sub` autenticado.
+
+Patrones aplicados con beneficio concreto: `MediaStorage` usa Strategy para desacoplar almacenamiento local de futuros object stores; repositorios encapsulan persistencia; caché-aside, idempotencia y operaciones explícitas de estado protegen las escrituras. No se agregan patrones GoF ni capas vacías por anticipación.
+
+Las capacidades de seguimiento, perfiles sociales persistidos, complejidad GraphQL avanzada y E2E Playwright siguen siendo trabajo posterior; no deben marcarse como implementadas solo por estar en la arquitectura objetivo.
 
 Los agentes deben **evolucionar esta estructura**, no sustituirla innecesariamente.
 

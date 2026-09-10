@@ -12,8 +12,10 @@ function SendIcon() {
 
 function PostComposer({ user, onSubmit }) {
   const [content, setContent] = useState('')
+  const [files, setFiles] = useState([])
   const [isPublishing, setIsPublishing] = useState(false)
   const [error, setError] = useState('')
+  const [idempotencyKey, setIdempotencyKey] = useState(null)
 
   const handleSubmit = async (event) => {
     event.preventDefault()
@@ -25,14 +27,31 @@ function PostComposer({ user, onSubmit }) {
     }
 
     setIsPublishing(true)
+    const operationKey = idempotencyKey || globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random()}`
     try {
-      await onSubmit(content)
+      await onSubmit(content, files, operationKey)
       setContent('')
+      setFiles([])
+      setIdempotencyKey(null)
     } catch (publishError) {
+      setIdempotencyKey(operationKey)
       setError(publishError.message || 'No se pudo publicar. Inténtalo de nuevo.')
     } finally {
       setIsPublishing(false)
     }
+  }
+
+  const handleFiles = (event) => {
+    const nextFiles = Array.from(event.target.files || [])
+    event.target.value = ''
+    const validTypes = new Set(['image/jpeg', 'image/png', 'image/webp'])
+    if (nextFiles.length > 4 || nextFiles.some((file) => !validTypes.has(file.type) || file.size > 5 * 1024 * 1024)) {
+      setError('Adjunta hasta cuatro imágenes JPG, PNG o WebP de máximo 5 MB cada una.')
+      return
+    }
+    setError('')
+    setFiles(nextFiles)
+    setIdempotencyKey(null)
   }
 
   return (
@@ -47,6 +66,7 @@ function PostComposer({ user, onSubmit }) {
             value={content}
             onChange={(event) => {
               setContent(event.target.value)
+              setIdempotencyKey(null)
               setError('')
             }}
             maxLength={500}
@@ -59,7 +79,12 @@ function PostComposer({ user, onSubmit }) {
           <span className="grid size-6 place-items-center rounded-full bg-mint/50 text-[#246a55]" aria-hidden="true">✦</span>
           <span>{content.length}/500 caracteres</span>
         </div>
-        <div className="flex items-center justify-between gap-3 sm:justify-end">
+        <div className="flex flex-wrap items-center justify-between gap-3 sm:justify-end">
+          <label className="inline-flex min-h-10 cursor-pointer items-center gap-2 rounded-xl px-3 text-sm font-bold text-muted transition hover:bg-paper hover:text-ink focus-within:outline-3 focus-within:outline-violet/30 focus-within:outline-offset-2" htmlFor="post-media">
+            <span aria-hidden="true">▧</span> Imagen
+            <input id="post-media" className="sr-only" type="file" accept="image/jpeg,image/png,image/webp" multiple onChange={handleFiles} />
+          </label>
+          {files.length > 0 && <span className="max-w-[180px] truncate text-xs text-muted" title={files.map((file) => file.name).join(', ')}>{files.length} imagen{files.length > 1 ? 'es' : ''} seleccionada{files.length > 1 ? 's' : ''}</span>}
           {error && <p className="text-xs font-semibold text-red-700" role="alert">{error}</p>}
           <button
             className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl bg-ink px-4 text-sm font-bold text-white transition hover:-translate-y-0.5 hover:bg-[#1b2852] focus-visible:outline-3 focus-visible:outline-violet/30 focus-visible:outline-offset-2 disabled:cursor-not-allowed disabled:opacity-50"

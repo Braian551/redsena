@@ -1,14 +1,16 @@
 # RedSENA
 
-RedSENA es una red social en evolución para publicaciones e interacción entre usuarios. El repositorio contiene un scaffold de Spring Boot y React/Vite, con una primera vertical de autenticación Firebase en el frontend y una base de infraestructura local con PostgreSQL y Redis.
+RedSENA es una red social en evolución para publicaciones e interacción entre usuarios. El repositorio contiene un monolito modular Spring Boot y un frontend React/Vite, con autenticación Firebase en el cliente y una primera vertical social persistida en PostgreSQL.
 
 ## Estado actual
 
-- Backend: aplicación Spring Boot mínima en `backend/demo`, con una clase de arranque y un test de contexto. La validación Firebase ID token en Spring Security aún está pendiente.
-- Frontend: React/Vite con login y registro mediante Firebase Email/Password, acceso Google, persistencia de sesión y cierre de sesión.
-- Compose: `backend/demo/compose.yaml` define PostgreSQL 16 y Redis 7.4 con red, health checks y volumen persistente para PostgreSQL.
-- Persistencia de dominio, GraphQL, Security backend, Flyway, Actuator, métricas y funcionalidades sociales todavía no están implementados. Redis está preparado como dependencia local, pero aún no lo consume el backend.
-- Las pruebas de frontend y E2E están previstas, pero sus dependencias y scripts aún no están declarados.
+- Backend: Spring Boot 4.1.1 con migraciones Flyway, usuarios sincronizados desde el `sub` autenticado, posts, media, comentarios, likes, GraphQL, caché/idempotencia/rate limit Redis y Actuator.
+- Frontend: React/Vite con login y registro mediante Firebase Email/Password, acceso Google, persistencia de sesión y cierre de sesión; al autenticarse consume el feed y las mutaciones sociales por GraphQL con Bearer.
+- Perfil: foto de Google por defecto y foto propia opcional en Firebase Storage, con reglas versionadas y reflejo del avatar en Posts.
+- Compose: `backend/demo/compose.yaml` orquesta PostgreSQL 16, Redis 7.4, backend, frontend Nginx, media Nginx y reverse proxy Nginx, con red, health checks y volúmenes de PostgreSQL/uploads.
+- El feed usa paginación keyset (`created_at DESC, id DESC`) y `@BatchMapping` para autores, contadores, likes del lector y comentarios, evitando N+1 evidente. Las variantes cacheadas incluyen el `sub` autenticado porque `likedByViewer` es específico de la sesión.
+- Vitest/React Testing Library/Playwright aún no están declarados; el frontend se valida con los scripts reales `npm run lint` y `npm run build`.
+- Despliegue: existe un módulo aislado en [`deploy/`](deploy/), documentado en [`dos/deployment-ubuntu-ssh.md`](dos/deployment-ubuntu-ssh.md). En la VPS compartida usa `172.17.0.1:18080`; el edge existente publica `redsena.online` sin alterar las rutas de Angelow.
 
 No asumir que una capacidad de la arquitectura objetivo ya está disponible solo porque aparece documentada.
 
@@ -17,7 +19,7 @@ No asumir que una capacidad de la arquitectura objetivo ya está disponible solo
 | Área | Tecnología y versión observada |
 |---|---|
 | Backend | Java 21, Spring Boot 4.1.1, Maven Wrapper 3.9.16 |
-| Backend actual | Spring Data JPA, Thymeleaf, Docker Compose runtime, Spring Test, Testcontainers JUnit |
+| Backend actual | JPA, PostgreSQL JDBC, GraphQL, Security resource server, Redis/cache, Flyway, Actuator, Spring Test, Testcontainers PostgreSQL/Redis |
 | Frontend | JavaScript ES modules, React 19.2.8, React DOM 19.2.8 |
 | Tooling frontend | Vite 8.3.0, `@vitejs/plugin-react` 6.1.1, Oxlint 1.81.0, Firebase 12.19.0, Tailwind CSS 4.x + `@tailwindcss/vite` |
 | Objetivo de infraestructura | PostgreSQL, Redis, Docker Compose, Nginx y volumen persistente para uploads |
@@ -45,8 +47,10 @@ Las versiones del `pom.xml`, `package.json` y lockfiles son la fuente concreta. 
 │       ├── plan.md
 │       └── task.md
 ├── backend/demo/
+│   ├── Dockerfile
+│   ├── compose.yaml
 │   ├── pom.xml
-│   ├── mvnw / mvnw.cmd
+│   ├── docker/
 │   └── src/
 └── frontend/redsena/
     ├── package.json
@@ -77,15 +81,18 @@ Desde `backend/demo`:
 
 El comando usa el Maven Wrapper del proyecto.
 
-Para levantar las dependencias de la etapa actual:
+Para levantar todo el stack integrado:
 
 ```powershell
 Copy-Item .env.example .env
-docker compose up -d
+# Completa FIREBASE_PROJECT_ID y VITE_FIREBASE_* antes de una prueba autenticada.
+docker compose up --build -d
 docker compose ps
 ```
 
-Para ejecutar la aplicación durante la etapa actual:
+La aplicación queda disponible en `http://localhost:8080`; GraphQL está en `/graphql`, uploads en `/api/uploads` y media en `/media/*`. PostgreSQL y Redis solo están publicados dentro de la red Compose. `docker compose down` conserva los volúmenes; evita `down -v` si quieres conservar datos.
+
+Para ejecutar solo el backend durante desarrollo:
 
 ```powershell
 .\mvnw.cmd spring-boot:run
@@ -100,7 +107,7 @@ npm ci
 npm run dev
 ```
 
-Antes de iniciar, copia `frontend/redsena/.env.example` como `.env.local` y completa la configuración Web de Firebase. En Firebase Console habilita los proveedores Email/Password y Google, y autoriza el dominio local.
+Antes de iniciar, copia `frontend/redsena/.env.example` como `.env.local` y completa la configuración Web de Firebase, incluido `VITE_FIREBASE_STORAGE_BUCKET`. En Firebase Console habilita los proveedores Email/Password, Google y Storage, y autoriza el dominio local. Para desarrollo con Vite, el proxy apunta al backend en `localhost:8080`; usa el Compose integrado si necesitas servir media.
 
 Comprobaciones disponibles actualmente:
 
@@ -109,17 +116,24 @@ npm run lint
 npm run build
 ```
 
-Los scripts de tests frontend y E2E se agregarán cuando se incorporen sus dependencias; no uses `npm test` hasta que exista en `package.json`.
+La prueba backend completa incluye contexto, migración, cursor y GraphQL contra PostgreSQL/Redis Testcontainers:
+
+```powershell
+cd backend/demo
+.\mvnw.cmd test
+docker compose -f compose.yaml config
+```
 
 ## Principios de arquitectura
 
 - PostgreSQL será la fuente de verdad; Redis será secundario para caché y datos efímeros.
 - Backend modular con MVC: presentación, aplicación, dominio e infraestructura.
-- GraphQL será la interfaz principal cuando se implemente, en `/graphql`, con esquemas separados y carga batch para evitar N+1.
+- GraphQL es la interfaz principal de posts, feed, comentarios y likes en `/graphql`, con esquemas separados y carga batch para evitar N+1.
 - Los feeds usarán paginación limitada, preferiblemente por cursor/keyset.
 - Las escrituras sensibles a reintentos usarán idempotencia y restricciones de base de datos.
 - Los uploads usarán almacenamiento persistente y un contrato `MediaStorage`; los binarios no se guardarán en Git.
-- Docker Compose evolucionará gradualmente hacia PostgreSQL, Redis, backend, frontend, media y Nginx con health checks.
+- `MediaStorage` aplica Strategy para que el volumen local pueda sustituirse por object storage sin acoplar el dominio; no se agregan abstracciones GoF sin una necesidad concreta.
+- Docker Compose ya integra PostgreSQL, Redis, backend, frontend, media y Nginx con health checks; el despliegue productivo debe inyectar secretos y no publicar bases de datos.
 - La interfaz React será modular, accesible, responsive y rápida, sin dependencias innecesarias.
 
 ## Documentación para agentes
@@ -135,12 +149,12 @@ Los skills locales están separados por responsabilidad para mantener las tareas
 
 ## Roadmap técnico
 
-1. Completar la base de configuración y Compose con PostgreSQL, Redis y health checks. **Completado para la etapa local.**
-2. Incorporar autenticación backend, usuarios/perfiles y migraciones Flyway. **Pendiente.**
-3. Implementar publicaciones, media persistente, feed paginado, comentarios y likes idempotentes.
-4. Añadir GraphQL, batch loading, caché, rate limiting, observabilidad y manejo de errores consistente.
-5. Incorporar la batería proporcional de unitarios, integración, GraphQL, frontend y E2E.
-6. Validar builds reproducibles, smoke tests y despliegue mediante Compose.
+1. Base de configuración y Compose con PostgreSQL, Redis, frontend, media, Nginx y health checks. **Completado.**
+2. Autenticación backend opcional con Firebase JWT, usuarios y migraciones Flyway. **Completado; requiere `FIREBASE_PROJECT_ID` para validar tokens reales.**
+3. Publicaciones, media persistente, feed paginado, comentarios y likes explícitos. **Completado en primera vertical.**
+4. GraphQL batch loading, caché, idempotencia, rate limiting, Actuator y errores consistentes. **Completado en primera vertical.**
+5. Ampliar cobertura de frontend y E2E con Vitest/RTL/Playwright. **Pendiente.**
+6. Despliegue productivo con secretos, HTTPS del edge compartido y smoke público. **Validado en `https://redsena.online` el 10-sep-2026**; queda pendiente el smoke autenticado manual con una cuenta real y la sustitución opcional del volumen local por object storage.
 
 Cada etapa debe conservar el alcance pequeño, probar el flujo vertical y documentar lo que realmente quedó implementado.
 

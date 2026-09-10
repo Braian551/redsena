@@ -32,10 +32,14 @@ function PostCard({ post, user, onLike, onComment }) {
   const [comment, setComment] = useState('')
   const [isSendingComment, setIsSendingComment] = useState(false)
   const [error, setError] = useState('')
+  const [idempotencyKey, setIdempotencyKey] = useState(null)
   const userKey = user?.uid || user?.email
-  const isLiked = (post.likedBy || []).includes(userKey)
+  const isLiked = typeof post.likedByViewer === 'boolean' ? post.likedByViewer : (post.likedBy || []).includes(userKey)
   const comments = post.comments || []
-  const authorLabel = post.author?.displayName || post.author?.email || 'Miembro RedSENA'
+  const likeCount = post.likeCount ?? post.likedBy?.length ?? 0
+  const commentCount = post.commentCount ?? comments.length
+  const author = post.authorId === userKey || post.author?.email === user?.email ? user : post.author
+  const authorLabel = author?.displayName || author?.email || 'Miembro RedSENA'
 
   const handleComment = async (event) => {
     event.preventDefault()
@@ -43,10 +47,13 @@ function PostCard({ post, user, onLike, onComment }) {
 
     setError('')
     setIsSendingComment(true)
+    const operationKey = idempotencyKey || globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random()}`
     try {
-      await onComment(post.id, comment)
+      await onComment(post.id, comment, operationKey)
       setComment('')
+      setIdempotencyKey(null)
     } catch (commentError) {
+      setIdempotencyKey(operationKey)
       setError(commentError.message || 'No se pudo enviar el comentario.')
     } finally {
       setIsSendingComment(false)
@@ -57,7 +64,7 @@ function PostCard({ post, user, onLike, onComment }) {
     <article className="rounded-[24px] border border-line bg-white p-5 shadow-[0_16px_40px_rgba(38,55,102,0.045)] transition hover:shadow-[0_20px_45px_rgba(38,55,102,0.08)] sm:p-6">
       <header className="flex items-start justify-between gap-3">
         <div className="flex min-w-0 items-center gap-3">
-          <UserAvatar user={post.author} className="size-11 shrink-0" label={`Avatar de ${authorLabel}`} />
+          <UserAvatar user={author} className="size-11 shrink-0" label={`Avatar de ${authorLabel}`} />
           <div className="min-w-0">
             <h3 className="truncate text-sm font-extrabold text-ink">{authorLabel}</h3>
             <p className="mt-0.5 text-xs text-muted">{formatRelativeTime(post.createdAt)}</p>
@@ -68,20 +75,26 @@ function PostCard({ post, user, onLike, onComment }) {
 
       <p className="mt-5 whitespace-pre-wrap text-[15px] leading-7 text-[#2b3657]">{post.content}</p>
 
+      {post.media?.length > 0 && (
+        <div className={`mt-5 grid gap-2 ${post.media.length > 1 ? 'sm:grid-cols-2' : ''}`}>
+          {post.media.map((media) => <img className="max-h-[420px] w-full rounded-2xl border border-line object-cover" key={media.id} src={media.url} alt="Imagen adjunta a la publicación" loading="lazy" />)}
+        </div>
+      )}
+
       <div className="mt-5 flex items-center gap-1 border-t border-line pt-3">
         <button
           className={`inline-flex min-h-10 items-center gap-2 rounded-xl px-3 text-sm font-bold transition focus-visible:outline-3 focus-visible:outline-violet/30 focus-visible:outline-offset-2 ${isLiked ? 'bg-[#fff0f2] text-[#c44963]' : 'text-muted hover:bg-paper hover:text-[#c44963]'}`}
           type="button"
-          onClick={() => onLike(post.id)}
+          onClick={() => onLike(post.id, !isLiked)}
           aria-pressed={isLiked}
         >
           <HeartIcon filled={isLiked} />
-          <span>{post.likedBy?.length || 0}</span>
+          <span>{likeCount}</span>
           <span className="sr-only">{isLiked ? 'Me gusta quitado' : 'Me gusta'} esta publicación</span>
         </button>
         <a className="inline-flex min-h-10 items-center gap-2 rounded-xl px-3 text-sm font-bold text-muted transition hover:bg-paper hover:text-ink focus-visible:outline-3 focus-visible:outline-violet/30 focus-visible:outline-offset-2" href={`#comments-${post.id}`}>
           <MessageIcon />
-          <span>{comments.length}</span>
+          <span>{commentCount}</span>
           <span className="sr-only">comentarios</span>
         </a>
       </div>
@@ -106,6 +119,7 @@ function PostCard({ post, user, onLike, onComment }) {
           value={comment}
           onChange={(event) => {
             setComment(event.target.value)
+            setIdempotencyKey(null)
             setError('')
           }}
           placeholder="Añade un comentario…"

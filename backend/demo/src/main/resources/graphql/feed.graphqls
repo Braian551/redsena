@@ -1,0 +1,4 @@
+type PostConnection {
+  nodes: [Post!]!
+  pageInfo: PageInfo!
+}

@@ -1,0 +1,18 @@
+type PageInfo {
+  hasNextPage: Boolean!
+  endCursor: String
+}
+
+type Query {
+  me: User
+  post(id: ID!): Post
+  feed(first: Int = 20, after: String): PostConnection!
+}
+
+type Mutation {
+  createPost(input: CreatePostInput!): Post!
+  deletePost(id: ID!): Boolean!
+  setPostLike(postId: ID!, liked: Boolean!): PostLikeResult!
+  addComment(input: AddCommentInput!): Comment!
+  deleteComment(id: ID!): Boolean!
+}

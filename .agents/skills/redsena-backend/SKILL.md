@@ -9,7 +9,7 @@ Use this for Spring Boot, API, database, cache, security, uploads, or infrastruc
 
 ## Current baseline
 
-The backend is currently a minimal Spring Boot application in `backend/demo`, package `com.redsena.demo`, using Java 21 and Spring Boot 4.1.1. Its POM currently declares JPA, Thymeleaf, Docker Compose runtime support, Spring test starters, and Testcontainers JUnit support. GraphQL, Security, Redis, Flyway, Actuator, and Micrometer are target capabilities, not current dependencies; add only what the requested slice needs.
+The backend in `backend/demo`, package `com.redsena.demo`, uses Java 21 and Spring Boot 4.1.1. It now includes the first social slice with JPA, GraphQL, Security resource-server support, Redis/cache, Flyway, Actuator, multipart media storage and Testcontainers for PostgreSQL/Redis. Extend the existing modules incrementally; do not replace the scaffold or claim future modules are implemented.
 
 ## MVC within a modular monolith
 
@@ -62,4 +62,3 @@ Presentation is the MVC controller boundary; application coordinates the model a
 - Return stable GraphQL error codes and request IDs without exposing stack traces or secrets.
 
 Do not create empty layers, speculative abstractions, or a complex fan-out feed before measured demand exists.
-

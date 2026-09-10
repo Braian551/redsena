@@ -9,7 +9,7 @@ Use this for test planning, implementation, failures, or delivery verification. 
 
 ## Observed test baseline
 
-Backend currently has a Spring context smoke test, a Testcontainers configuration placeholder, and a test application entry point. The frontend currently declares only `dev`, `build`, `lint`, and `preview`; Vitest, React Testing Library, and Playwright are target tools, not installed test scripts.
+Backend has a Spring context smoke test, Flyway/JPA validation, and a GraphQL integration test against PostgreSQL and Redis Testcontainers. The frontend currently declares only `dev`, `build`, `lint`, and `preview`; Vitest, React Testing Library, and Playwright are still target tools, not installed test scripts.
 
 Inspect the actual POM and `package.json` before running or documenting a command. The current known checks are:
 
@@ -44,4 +44,3 @@ npm run build
 - Verify the database constraint as well as the Redis guard for domain uniqueness.
 - For cache-only features, test hit, miss, TTL/eviction as relevant, write invalidation, and safe fallback when Redis is unavailable.
 - For each code change, start with the smallest focused test, then run the relevant suite and the full available check before completion. Do not add broad E2E coverage to a pure unit change.
-

@@ -7,8 +7,6 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:-redsena}
       POSTGRES_USER: ${POSTGRES_USER:-redsena}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-redsena_dev_only_change_me}
-    ports:
-      - "${POSTGRES_PORT:-5432}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     networks:
@@ -23,8 +21,6 @@ services:
   redis:
     image: redis:7.4-alpine
     command: ["redis-server", "--appendonly", "no"]
-    ports:
-      - "${REDIS_PORT:-6379}:6379"
     networks:
       - redsena_network
     healthcheck:
@@ -34,8 +30,100 @@ services:
       retries: 10
       start_period: 5s
 
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      DB_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-redsena}
+      DB_USERNAME: ${POSTGRES_USER:-redsena}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-redsena_dev_only_change_me}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      UPLOAD_PATH: /app/uploads
+      FIREBASE_PROJECT_ID: ${FIREBASE_PROJECT_ID:?FIREBASE_PROJECT_ID is required}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:8080,http://localhost:5173}
+    volumes:
+      - redsena_uploads:/app/uploads
+    networks:
+      - redsena_network
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    expose:
+      - "8080"
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://127.0.0.1:8080/actuator/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+
+  frontend:
+    build:
+      context: ../../frontend/redsena
+      dockerfile: Dockerfile
+      args:
+        VITE_FIREBASE_API_KEY: ${VITE_FIREBASE_API_KEY:?VITE_FIREBASE_API_KEY is required}
+        VITE_FIREBASE_AUTH_DOMAIN: ${VITE_FIREBASE_AUTH_DOMAIN:?VITE_FIREBASE_AUTH_DOMAIN is required}
+        VITE_FIREBASE_PROJECT_ID: ${VITE_FIREBASE_PROJECT_ID:?VITE_FIREBASE_PROJECT_ID is required}
+        VITE_FIREBASE_STORAGE_BUCKET: ${VITE_FIREBASE_STORAGE_BUCKET:?VITE_FIREBASE_STORAGE_BUCKET is required}
+        VITE_FIREBASE_MESSAGING_SENDER_ID: ${VITE_FIREBASE_MESSAGING_SENDER_ID:?VITE_FIREBASE_MESSAGING_SENDER_ID is required}
+        VITE_FIREBASE_APP_ID: ${VITE_FIREBASE_APP_ID:?VITE_FIREBASE_APP_ID is required}
+        VITE_FIREBASE_MEASUREMENT_ID: ${VITE_FIREBASE_MEASUREMENT_ID:-}
+        VITE_GRAPHQL_URL: ${VITE_GRAPHQL_URL:-/graphql}
+        VITE_SOCIAL_BACKEND_ENABLED: ${VITE_SOCIAL_BACKEND_ENABLED:-true}
+    networks:
+      - redsena_network
+    expose:
+      - "80"
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://127.0.0.1/health || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  media:
+    image: nginx:1.27-alpine
+    volumes:
+      - redsena_uploads:/usr/share/nginx/html/media:ro
+      - ./docker/media.conf:/etc/nginx/conf.d/default.conf:ro
+    networks:
+      - redsena_network
+    expose:
+      - "80"
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://127.0.0.1/health || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  nginx:
+    image: nginx:1.27-alpine
+    ports:
+      - "${HTTP_PORT:-8080}:80"
+    volumes:
+      - ./docker/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    networks:
+      - redsena_network
+    depends_on:
+      frontend:
+        condition: service_healthy
+      backend:
+        condition: service_healthy
+      media:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://127.0.0.1/health || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
 volumes:
   postgres_data:
+  redsena_uploads:
 
 networks:
   redsena_network:

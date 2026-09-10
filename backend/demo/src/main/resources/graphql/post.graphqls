@@ -1,0 +1,28 @@
+type PostMedia {
+  id: ID!
+  url: String!
+  contentType: String!
+  size: Int!
+}
+
+type Post {
+  id: ID!
+  author: User!
+  content: String!
+  createdAt: String!
+  media: [PostMedia!]!
+  likeCount: Int!
+  commentCount: Int!
+  likedByViewer: Boolean!
+  comments: [Comment!]!
+}
+
+input CreatePostInput {
+  content: String!
+  mediaIds: [ID!]
+}
+
+type PostLikeResult {
+  liked: Boolean!
+  likeCount: Int!
+}

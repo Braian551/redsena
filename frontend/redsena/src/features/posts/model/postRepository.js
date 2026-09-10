@@ -1,4 +1,18 @@
+import { graphqlRequest, SOCIAL_BACKEND_ENABLED, uploadMedia } from '../../../shared/api/graphqlClient.js'
+
 const POSTS_STORAGE_KEY = 'redsena.posts.v1'
+
+const POST_FIELDS = `
+  id
+  author { id displayName email photoURL }
+  content
+  createdAt
+  media { id url contentType size }
+  likeCount
+  commentCount
+  likedByViewer
+  comments { id content createdAt author { id displayName email photoURL } }
+`
 
 const seedPosts = [
   {
@@ -90,15 +104,94 @@ function toAuthor(user) {
   }
 }
 
-function loadPosts() {
+function mapAuthor(author) {
+  return author
+    ? {
+        id: author.id,
+        displayName: author.displayName || author.email?.split('@')[0] || 'Miembro RedSENA',
+        email: author.email || '',
+        photoURL: author.photoURL || '',
+      }
+    : { displayName: 'Miembro RedSENA', email: '', photoURL: '' }
+}
+
+function mapComment(comment) {
+  return {
+    id: comment.id,
+    authorId: comment.author?.id,
+    author: mapAuthor(comment.author),
+    content: comment.content,
+    createdAt: comment.createdAt,
+  }
+}
+
+function mapPost(post) {
+  return {
+    id: post.id,
+    authorId: post.author?.id,
+    author: mapAuthor(post.author),
+    content: post.content,
+    createdAt: post.createdAt,
+    media: post.media || [],
+    likeCount: post.likeCount || 0,
+    commentCount: post.commentCount || 0,
+    likedByViewer: Boolean(post.likedByViewer),
+    comments: (post.comments || []).map(mapComment),
+  }
+}
+
+async function loadRemotePosts(user) {
+  const data = await graphqlRequest(
+    `query Feed($first: Int!, $after: String) {
+      feed(first: $first, after: $after) {
+        nodes { ${POST_FIELDS} }
+        pageInfo { hasNextPage endCursor }
+      }
+    }`,
+    { first: 20, after: null },
+    { user },
+  )
+  return (data?.feed?.nodes || []).map(mapPost)
+}
+
+async function loadPosts(user) {
+  if (SOCIAL_BACKEND_ENABLED) {
+    return loadRemotePosts(user)
+  }
+
   return readPosts().sort((first, second) => new Date(second.createdAt) - new Date(first.createdAt))
 }
 
-function createPost({ user, content }) {
+async function createRemotePost({ user, content, files = [], idempotencyKey }) {
+  const operationKey = idempotencyKey || `post-${user?.uid || 'session'}-${Date.now()}-${globalThis.crypto?.randomUUID?.() || Math.random()}`
+  const mediaIds = []
+  for (const [index, file] of files.entries()) {
+    const media = await uploadMedia(file, user, `${operationKey}-upload-${index}`)
+    mediaIds.push(media.id)
+  }
+
+  const data = await graphqlRequest(
+    `mutation CreatePost($input: CreatePostInput!) {
+      createPost(input: $input) { ${POST_FIELDS} }
+    }`,
+    { input: { content, mediaIds } },
+    {
+      user,
+      idempotencyKey: operationKey,
+    },
+  )
+  return mapPost(data.createPost)
+}
+
+async function createPost({ user, content, files = [], idempotencyKey }) {
   const cleanContent = content.trim()
 
   if (!cleanContent) {
     throw new Error('Escribe algo antes de publicar.')
+  }
+
+  if (SOCIAL_BACKEND_ENABLED) {
+    return createRemotePost({ user, content: cleanContent, files, idempotencyKey })
   }
 
   const post = {
@@ -115,7 +208,18 @@ function createPost({ user, content }) {
   return post
 }
 
-function toggleLike(postId, user) {
+async function toggleLike(postId, user, liked) {
+  if (SOCIAL_BACKEND_ENABLED) {
+    const data = await graphqlRequest(
+      `mutation SetPostLike($postId: ID!, $liked: Boolean!) {
+        setPostLike(postId: $postId, liked: $liked) { liked likeCount }
+      }`,
+      { postId, liked },
+      { user },
+    )
+    return { likedByViewer: data.setPostLike.liked, likeCount: data.setPostLike.likeCount }
+  }
+
   const userKey = getUserKey(user)
   let nextPost
   const posts = readPosts().map((post) => {
@@ -132,11 +236,25 @@ function toggleLike(postId, user) {
   return nextPost
 }
 
-function addComment(postId, user, content) {
+async function addComment(postId, user, content, idempotencyKey) {
   const cleanContent = content.trim()
 
   if (!cleanContent) {
     throw new Error('Escribe un comentario antes de enviarlo.')
+  }
+
+  if (SOCIAL_BACKEND_ENABLED) {
+    const data = await graphqlRequest(
+      `mutation AddComment($input: AddCommentInput!) {
+        addComment(input: $input) { id content createdAt author { id displayName email photoURL } }
+      }`,
+      { input: { postId, content: cleanContent } },
+      {
+        user,
+        idempotencyKey: idempotencyKey || `comment-${user?.uid || 'session'}-${Date.now()}-${globalThis.crypto?.randomUUID?.() || Math.random()}`,
+      },
+    )
+    return { comment: mapComment(data.addComment) }
   }
 
   const comment = {

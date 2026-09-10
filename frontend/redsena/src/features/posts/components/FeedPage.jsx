@@ -1,34 +1,46 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { PostCard } from './PostCard.jsx'
 import { PostComposer } from './PostComposer.jsx'
 import { addComment, createPost, loadPosts, toggleLike } from '../model/postRepository.js'
 
 function FeedPage({ user }) {
-  const [initialFeed] = useState(() => {
-    try {
-      return { posts: loadPosts(), error: '' }
-    } catch {
-      return { posts: [], error: 'No se pudo cargar tu feed. Recarga la página para intentarlo de nuevo.' }
-    }
-  })
-  const [posts, setPosts] = useState(initialFeed.posts)
-  const [error] = useState(initialFeed.error)
+  const [posts, setPosts] = useState([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState('')
 
-  const handleCreatePost = async (content) => {
-    const nextPost = createPost({ user, content })
+  useEffect(() => {
+    let isActive = true
+    loadPosts(user)
+      .then((nextPosts) => {
+        if (isActive) setPosts(nextPosts)
+      })
+      .catch((loadError) => {
+        if (isActive) setError(loadError.message || 'No se pudo cargar tu feed. Recarga la página para intentarlo de nuevo.')
+      })
+      .finally(() => {
+        if (isActive) setIsLoading(false)
+      })
+    return () => { isActive = false }
+  }, [user])
+
+  const handleCreatePost = async (content, files, idempotencyKey) => {
+    const nextPost = await createPost({ user, content, files, idempotencyKey })
     setPosts((currentPosts) => [nextPost, ...currentPosts])
   }
 
-  const handleLike = (postId) => {
-    const nextPost = toggleLike(postId, user)
+  const handleLike = async (postId, liked) => {
+    const nextPost = await toggleLike(postId, user, liked)
     if (!nextPost) return
-    setPosts((currentPosts) => currentPosts.map((post) => (post.id === postId ? nextPost : post)))
+    setPosts((currentPosts) => currentPosts.map((post) => (post.id === postId ? { ...post, ...nextPost } : post)))
   }
 
-  const handleComment = async (postId, content) => {
-    const result = addComment(postId, user, content)
-    if (!result?.post) return
-    setPosts((currentPosts) => currentPosts.map((post) => (post.id === postId ? result.post : post)))
+  const handleComment = async (postId, content, idempotencyKey) => {
+    const result = await addComment(postId, user, content, idempotencyKey)
+    setPosts((currentPosts) => currentPosts.map((post) => {
+      if (post.id !== postId) return post
+      if (result.post) return result.post
+      return { ...post, comments: [...(post.comments || []), result.comment], commentCount: (post.commentCount || 0) + 1 }
+    }))
   }
 
   return (
@@ -47,7 +59,9 @@ function FeedPage({ user }) {
 
         {error && <p className="mt-5 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800" role="alert">{error}</p>}
 
-        {posts.length === 0 ? (
+        {isLoading ? (
+          <div className="mt-6 rounded-[24px] border border-line bg-white p-8 text-center" role="status" aria-live="polite">Cargando tu feed…</div>
+        ) : posts.length === 0 ? (
           <div className="mt-6 rounded-[24px] border border-dashed border-line bg-white p-8 text-center">
             <p className="text-lg font-bold text-ink">Tu feed está esperando una historia.</p>
             <p className="mt-2 text-sm text-muted">Sé la primera persona en compartir algo con tu comunidad.</p>

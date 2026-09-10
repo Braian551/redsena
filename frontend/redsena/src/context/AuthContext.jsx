@@ -14,6 +14,7 @@ import {
 } from 'firebase/auth'
 import { AuthContext } from './auth-context.js'
 import { auth, isFirebaseConfigured, provider } from '../lib/firebase.js'
+import { deleteProfilePhoto, uploadProfilePhoto } from '../lib/profilePhotoStorage.js'
 
 const getAuthErrorMessage = (error) => {
   switch (error?.code) {
@@ -31,6 +32,8 @@ const getAuthErrorMessage = (error) => {
       return 'Este dominio no está autorizado para iniciar sesión con Firebase.'
     case 'auth/network-request-failed':
       return 'No se pudo conectar con Firebase. Comprueba tu conexión e inténtalo de nuevo.'
+    case 'auth/api-key-not-valid':
+      return 'La API key de Firebase no es válida para este proyecto. Revisa la configuración de VITE_FIREBASE_API_KEY y reinicia Vite.'
     case 'auth/too-many-requests':
       return 'Se realizaron demasiados intentos. Espera unos minutos e inténtalo de nuevo.'
     case 'auth/invalid-credential':
@@ -44,8 +47,34 @@ const getAuthErrorMessage = (error) => {
       return 'Escribe un correo electrónico válido.'
     case 'app/firebase-not-configured':
       return 'Falta configurar Firebase. Copia .env.example a .env.local y completa sus valores.'
+    case 'app/firebase-storage-not-configured':
+      return 'Falta configurar Firebase Storage. Completa VITE_FIREBASE_STORAGE_BUCKET para guardar tu foto.'
+    case 'profile-photo/invalid-type':
+    case 'profile-photo/file-too-large':
+      return error.message
+    case 'storage/unauthorized':
+      return 'Firebase no permite guardar esta foto. Revisa las reglas de Storage.'
     default:
       return 'No se pudo completar la operación de autenticación. Inténtalo de nuevo.'
+  }
+}
+
+const getGooglePhotoURL = (currentUser) => currentUser?.providerData
+  ?.find((providerData) => providerData.providerId === 'google.com')
+  ?.photoURL || ''
+
+const toSessionUser = (currentUser) => {
+  if (!currentUser) {
+    return null
+  }
+
+  const googlePhotoURL = getGooglePhotoURL(currentUser)
+
+  return {
+    ...currentUser,
+    googlePhotoURL,
+    photoURL: currentUser.photoURL || googlePhotoURL || null,
+    getIdToken: () => currentUser.getIdToken(),
   }
 }
 
@@ -74,7 +103,7 @@ function AuthProvider({ children }) {
     const unsubscribe = onAuthStateChanged(
       auth,
       (currentUser) => {
-        setUser(currentUser)
+        setUser(toSessionUser(currentUser))
         setLoading(false)
       },
       (authError) => {
@@ -115,7 +144,7 @@ function AuthProvider({ children }) {
 
       if (displayName) {
         await updateProfile(result.user, { displayName })
-        setUser(result.user)
+        setUser(toSessionUser(result.user))
       }
 
       return result.user
@@ -148,6 +177,47 @@ function AuthProvider({ children }) {
     }
   }, [])
 
+  const setProfilePhoto = useCallback(async (file) => {
+    setError(null)
+
+    try {
+      const currentUser = getConfiguredAuth().currentUser
+      if (!currentUser) {
+        const authenticationError = new Error('No hay una sesión activa.')
+        authenticationError.code = 'auth/no-current-user'
+        throw authenticationError
+      }
+
+      const photoURL = await uploadProfilePhoto(currentUser, file)
+      await updateProfile(currentUser, { photoURL })
+      setUser(toSessionUser(currentUser))
+      return photoURL
+    } catch (photoError) {
+      setError(getAuthErrorMessage(photoError))
+      throw photoError
+    }
+  }, [])
+
+  const clearProfilePhoto = useCallback(async () => {
+    setError(null)
+
+    try {
+      const currentUser = getConfiguredAuth().currentUser
+      if (!currentUser) {
+        const authenticationError = new Error('No hay una sesión activa.')
+        authenticationError.code = 'auth/no-current-user'
+        throw authenticationError
+      }
+
+      await deleteProfilePhoto(currentUser)
+      await updateProfile(currentUser, { photoURL: getGooglePhotoURL(currentUser) || null })
+      setUser(toSessionUser(currentUser))
+    } catch (photoError) {
+      setError(getAuthErrorMessage(photoError))
+      throw photoError
+    }
+  }, [])
+
   const clearError = useCallback(() => setError(null), [])
 
   const value = useMemo(
@@ -160,8 +230,10 @@ function AuthProvider({ children }) {
       signInWithEmail,
       signInWithGoogle,
       signOut,
+      setProfilePhoto,
+      clearProfilePhoto,
     }),
-    [clearError, error, loading, registerWithEmail, signInWithEmail, signInWithGoogle, signOut, user],
+    [clearError, clearProfilePhoto, error, loading, registerWithEmail, setProfilePhoto, signInWithEmail, signInWithGoogle, signOut, user],
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

@@ -1,5 +1,7 @@
 import { getApp, getApps, initializeApp } from 'firebase/app'
+import { getAnalytics } from 'firebase/analytics'
 import { GoogleAuthProvider, getAuth } from 'firebase/auth'
+import { getStorage } from 'firebase/storage'
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -19,6 +21,18 @@ const app = isFirebaseConfigured
     : initializeApp(firebaseConfig)
   : null
 const auth = app ? getAuth(app) : null
+const storage = app && firebaseConfig.storageBucket ? getStorage(app) : null
+const analytics = (() => {
+  if (!app || !firebaseConfig.measurementId || typeof window === 'undefined') {
+    return null
+  }
+
+  try {
+    return getAnalytics(app)
+  } catch {
+    return null
+  }
+})()
 const provider = app ? new GoogleAuthProvider() : null
 
 if (provider) {
@@ -27,4 +41,4 @@ if (provider) {
   })
 }
 
-export { app, auth, isFirebaseConfigured, provider }
+export { analytics, app, auth, isFirebaseConfigured, provider, storage }

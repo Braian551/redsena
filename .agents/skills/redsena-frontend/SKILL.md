@@ -9,7 +9,7 @@ Use this for React components, pages, client state, frontend data access, and br
 
 ## Current baseline
 
-The frontend lives in `frontend/redsena`, uses JavaScript ES modules, React 19.2.8, React DOM 19.2.8, Vite 8.3.0, `@vitejs/plugin-react` 6.1.1, and Oxlint 1.81.0. The current working tree also contains Firebase 12.19.0 with `src/lib/firebase.js` and `src/context/AuthContext.jsx`; keep provider-specific calls behind that boundary and consider backend authentication/security integration pending. It is still visually the Vite starter and currently has no declared GraphQL client, Vitest, React Testing Library, or Playwright scripts. Keep JavaScript and Vite; do not migrate to TypeScript, Next.js, or another framework without explicit instruction.
+The frontend lives in `frontend/redsena`, uses JavaScript ES modules, React 19.2.8, React DOM 19.2.8, Vite 8.3.0, `@vitejs/plugin-react` 6.1.1, and Oxlint 1.81.0. The current working tree also contains Firebase 12.19.0 with `src/lib/firebase.js` and `src/context/AuthContext.jsx`; keep provider-specific calls behind that boundary. The posts feature has a small GraphQL/fetch adapter for feed, posts, media uploads, comments and likes, with an explicit localStorage fallback. Vitest, React Testing Library and Playwright scripts are still not declared. Keep JavaScript and Vite; do not migrate to TypeScript, Next.js, or another framework without explicit instruction.
 
 ## Module-first component architecture
 

@@ -22,9 +22,9 @@ When a change crosses layers, combine only the relevant skills. Examples: a Reac
 ## Repository facts
 
 - Backend: Java 21, Spring Boot 4.1.1, Maven Wrapper 3.9.16, package `com.redsena.demo`.
-- Backend currently contains only the Spring Boot entry point, a minimal `application.properties`, an empty Compose definition, and a context test scaffold with Testcontainers support.
-- Frontend: JavaScript ES modules, React 19.2.8, React DOM 19.2.8, Vite 8.3.0, `@vitejs/plugin-react` 6.1.1, Oxlint 1.81.0. The current working tree also contains a Firebase 12.19.0 client and an `AuthProvider`; treat backend authentication/security integration as pending.
-- Frontend currently remains the Vite starter screen; Vitest, React Testing Library, Playwright, GraphQL Client, and the target backend starters are not declared yet.
+- Backend currently contains the first social vertical slice: modular JPA/Flyway entities, GraphQL queries/mutations with batch mappings, Redis cache/idempotency/rate limiting, optional Firebase JWT validation, multipart media storage, Actuator and Testcontainers tests.
+- Frontend: JavaScript ES modules, React 19.2.8, React DOM 19.2.8, Vite 8.3.0, `@vitejs/plugin-react` 6.1.1, Oxlint 1.81.0, Firebase 12.19.0 and a small GraphQL/fetch boundary. Posts, images, comments and likes use the backend when `VITE_SOCIAL_BACKEND_ENABLED=true`; localStorage is an explicit fallback.
+- Vitest, React Testing Library and Playwright are still not declared; frontend verification currently uses the declared lint/build scripts.
 
 Treat these as observed facts, not as permission to add the whole target stack. Inspect `pom.xml` and `package.json` before assuming a dependency or script exists.
 

@@ -1,0 +1,11 @@
+type Comment {
+  id: ID!
+  author: User!
+  content: String!
+  createdAt: String!
+}
+
+input AddCommentInput {
+  postId: ID!
+  content: String!
+}
