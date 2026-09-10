@@ -7,11 +7,14 @@ type Query {
   me: User
   post(id: ID!): Post
   feed(first: Int = 20, after: String): PostConnection!
+  feedVersion: String!
 }
 
 type Mutation {
   createPost(input: CreatePostInput!): Post!
+  updatePost(id: ID!, input: UpdatePostInput!): Post!
   deletePost(id: ID!): Boolean!
+  reportPost(input: ReportPostInput!): PostReport!
   setPostLike(postId: ID!, liked: Boolean!): PostLikeResult!
   addComment(input: AddCommentInput!): Comment!
   deleteComment(id: ID!): Boolean!

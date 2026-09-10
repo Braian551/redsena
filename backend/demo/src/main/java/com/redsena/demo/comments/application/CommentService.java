@@ -4,6 +4,7 @@ import com.redsena.demo.comments.infrastructure.CommentRepository;
 import com.redsena.demo.comments.presentation.CommentView;
 import com.redsena.demo.shared.exception.ApiException;
 import com.redsena.demo.shared.idempotency.IdempotencyService;
+import com.redsena.demo.security.AdminAccessService;
 import com.redsena.demo.users.infrastructure.UserAccountRepository;
 import com.redsena.demo.users.presentation.UserView;
 import java.util.List;
@@ -20,12 +21,14 @@ public class CommentService {
 	private final CommentWriteService writer;
 	private final CommentRepository comments;
 	private final UserAccountRepository users;
+	private final AdminAccessService adminAccess;
 	private final IdempotencyService idempotency;
 
-	public CommentService(CommentWriteService writer, CommentRepository comments, UserAccountRepository users, IdempotencyService idempotency) {
+	public CommentService(CommentWriteService writer, CommentRepository comments, UserAccountRepository users, AdminAccessService adminAccess, IdempotencyService idempotency) {
 		this.writer = writer;
 		this.comments = comments;
 		this.users = users;
+		this.adminAccess = adminAccess;
 		this.idempotency = idempotency;
 	}
 
@@ -50,7 +53,7 @@ public class CommentService {
 	@Transactional(readOnly = true)
 	public Map<CommentView, UserView> authors(List<CommentView> commentViews) {
 		List<UUID> ids = commentViews.stream().map(CommentView::authorId).map(UUID::fromString).distinct().toList();
-		Map<String, UserView> byId = users.findAllById(ids).stream().collect(Collectors.toMap(user -> user.getId().toString(), UserView::from));
+		Map<String, UserView> byId = users.findAllById(ids).stream().collect(Collectors.toMap(user -> user.getId().toString(), user -> UserView.from(user, adminAccess.roleForEmail(user.getEmail()))));
 		return commentViews.stream().collect(Collectors.toMap(Function.identity(), comment -> byId.get(comment.authorId())));
 	}
 }

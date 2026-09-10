@@ -1,6 +1,9 @@
 import { graphqlRequest, SOCIAL_BACKEND_ENABLED, uploadMedia } from '../../../shared/api/graphqlClient.js'
 
 const POSTS_STORAGE_KEY = 'redsena.posts.v1'
+const REPORTS_STORAGE_KEY = 'redsena.post-reports.v1'
+const FEED_MEMORY_TTL_MS = 10000
+const feedMemoryCache = new Map()
 
 const POST_FIELDS = `
   id
@@ -96,6 +99,11 @@ function getUserKey(user) {
   return user?.uid || user?.email || 'anonymous'
 }
 
+function ownsPost(post, user) {
+  const userKey = getUserKey(user)
+  return post.authorId === userKey || post.author?.id === userKey || (post.author?.email && post.author.email === user?.email)
+}
+
 function toAuthor(user) {
   return {
     displayName: user?.displayName || user?.email?.split('@')[0] || 'Miembro RedSENA',
@@ -154,12 +162,30 @@ async function loadRemotePosts(user) {
   return (data?.feed?.nodes || []).map(mapPost)
 }
 
-async function loadPosts(user) {
+async function loadFeedVersion(user) {
   if (SOCIAL_BACKEND_ENABLED) {
-    return loadRemotePosts(user)
+    const data = await graphqlRequest('query FeedVersion { feedVersion }', {}, { user })
+    return data?.feedVersion || 'empty'
   }
 
-  return readPosts().sort((first, second) => new Date(second.createdAt) - new Date(first.createdAt))
+  const latest = readPosts().sort((first, second) => new Date(second.createdAt) - new Date(first.createdAt))[0]
+  return latest ? `${latest.createdAt}:${latest.id}` : 'empty'
+}
+
+async function loadPosts(user, { force = false } = {}) {
+  if (!SOCIAL_BACKEND_ENABLED) {
+    return readPosts().sort((first, second) => new Date(second.createdAt) - new Date(first.createdAt))
+  }
+
+  const key = getUserKey(user)
+  const cached = feedMemoryCache.get(key)
+  if (!force && cached && Date.now() - cached.fetchedAt < FEED_MEMORY_TTL_MS) {
+    return clonePosts(cached.posts)
+  }
+
+  const posts = await loadRemotePosts(user)
+  feedMemoryCache.set(key, { posts: clonePosts(posts), fetchedAt: Date.now() })
+  return posts
 }
 
 async function createRemotePost({ user, content, files = [], idempotencyKey }) {
@@ -276,34 +302,84 @@ async function addComment(postId, user, content, idempotencyKey) {
   return { post: nextPost, comment }
 }
 
-function getProfile(user) {
-  const storage = getStorage()
-  const key = `redsena.profile.${getUserKey(user)}`
-  const defaultProfile = { bio: 'Construyendo ideas y comunidad desde RedSENA.' }
+async function updatePost(postId, user, content) {
+  const cleanContent = content.trim()
+  if (!cleanContent) throw new Error('Escribe algo antes de guardar los cambios.')
+  if (cleanContent.length > 500) throw new Error('La publicación no puede superar 500 caracteres.')
 
-  if (!storage) {
-    return defaultProfile
+  if (SOCIAL_BACKEND_ENABLED) {
+    const data = await graphqlRequest(
+      `mutation UpdatePost($id: ID!, $input: UpdatePostInput!) {
+        updatePost(id: $id, input: $input) { ${POST_FIELDS} }
+      }`,
+      { id: postId, input: { content: cleanContent } },
+      { user },
+    )
+    return mapPost(data.updatePost)
   }
 
-  try {
-    return { ...defaultProfile, ...(JSON.parse(storage.getItem(key) || 'null') || {}) }
-  } catch {
-    return defaultProfile
-  }
+  const posts = readPosts()
+  const post = posts.find((item) => item.id === postId)
+  if (!post) throw new Error('La publicación no existe.')
+  if (!ownsPost(post, user)) throw new Error('No tienes permiso para modificar esta publicación.')
+  const nextPost = { ...post, content: cleanContent }
+  writePosts(posts.map((item) => (item.id === postId ? nextPost : item)))
+  return nextPost
 }
 
-function saveProfile(user, profile) {
-  const storage = getStorage()
-  const key = `redsena.profile.${getUserKey(user)}`
-  const nextProfile = { bio: profile.bio.trim().slice(0, 180) }
-
-  try {
-    storage?.setItem(key, JSON.stringify(nextProfile))
-  } catch {
-    // Keep the optimistic profile in the current view even if persistence fails.
+async function deletePost(postId, user) {
+  if (SOCIAL_BACKEND_ENABLED) {
+    const data = await graphqlRequest(
+      'mutation DeletePost($id: ID!) { deletePost(id: $id) }',
+      { id: postId },
+      { user },
+    )
+    return Boolean(data.deletePost)
   }
 
-  return nextProfile
+  const posts = readPosts()
+  const post = posts.find((item) => item.id === postId)
+  if (!post) throw new Error('La publicación no existe.')
+  if (!ownsPost(post, user)) throw new Error('No tienes permiso para modificar esta publicación.')
+  writePosts(posts.filter((item) => item.id !== postId))
+  return true
 }
 
-export { addComment, createPost, getProfile, loadPosts, saveProfile, toggleLike }
+async function reportPost(postId, user, reason) {
+  if (SOCIAL_BACKEND_ENABLED) {
+    const data = await graphqlRequest(
+      `mutation ReportPost($input: ReportPostInput!) {
+        reportPost(input: $input) { id reason status createdAt }
+      }`,
+      { input: { postId, reason } },
+      { user },
+    )
+    return data.reportPost
+  }
+
+  const posts = readPosts()
+  const post = posts.find((item) => item.id === postId)
+  if (!post) throw new Error('La publicación no existe.')
+  if (ownsPost(post, user)) throw new Error('No puedes reportar tu propia publicación.')
+
+  const storage = getStorage()
+  let reports = []
+  try {
+    reports = JSON.parse(storage?.getItem(REPORTS_STORAGE_KEY) || '[]')
+  } catch {
+    reports = []
+  }
+  const reporterId = getUserKey(user)
+  if (reports.some((report) => report.postId === postId && report.reporterId === reporterId)) {
+    throw new Error('Ya reportaste esta publicación.')
+  }
+  const report = { id: createId('report'), postId, reporterId, reason, status: 'OPEN', createdAt: new Date().toISOString() }
+  try {
+    storage?.setItem(REPORTS_STORAGE_KEY, JSON.stringify([...reports, report]))
+  } catch {
+    // The demo remains usable if browser storage is unavailable.
+  }
+  return report
+}
+
+export { addComment, createPost, deletePost, loadFeedVersion, loadPosts, reportPost, toggleLike, updatePost }

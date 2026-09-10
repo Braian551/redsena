@@ -3,4 +3,20 @@ type User {
   displayName: String!
   email: String!
   photoURL: String
+  bio: String!
+  role: UserRole!
+}
+
+enum UserRole {
+  USER
+  ADMIN
+}
+
+input UpdateProfileInput {
+  displayName: String
+  bio: String
+}
+
+extend type Mutation {
+  updateProfile(input: UpdateProfileInput!): User!
 }

@@ -1,0 +1,22 @@
+type AdminPost {
+  id: ID!
+  author: User!
+  content: String!
+  createdAt: String!
+  media: [PostMedia!]!
+  likeCount: Int!
+  commentCount: Int!
+}
+
+type AdminPostConnection {
+  nodes: [AdminPost!]!
+  pageInfo: PageInfo!
+}
+
+extend type Query {
+  adminPosts(first: Int = 20, after: String): AdminPostConnection!
+}
+
+extend type Mutation {
+  adminDeletePost(id: ID!): Boolean!
+}

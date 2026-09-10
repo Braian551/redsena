@@ -9,6 +9,7 @@ import com.redsena.demo.posts.domain.Post;
 import com.redsena.demo.posts.infrastructure.PostRepository;
 import com.redsena.demo.posts.presentation.PostView;
 import com.redsena.demo.security.CurrentUserService;
+import com.redsena.demo.security.AdminAccessService;
 import com.redsena.demo.shared.exception.ApiException;
 import com.redsena.demo.shared.idempotency.IdempotencyService;
 import com.redsena.demo.shared.pagination.Cursor;
@@ -38,6 +39,7 @@ public class PostService {
 	private final PostLikeRepository likes;
 	private final UserAccountRepository users;
 	private final CurrentUserService currentUser;
+	private final AdminAccessService adminAccess;
 	private final PostWriteService writer;
 	private final IdempotencyService idempotency;
 	private final int defaultPageSize;
@@ -50,6 +52,7 @@ public class PostService {
 			PostLikeRepository likes,
 			UserAccountRepository users,
 			CurrentUserService currentUser,
+			AdminAccessService adminAccess,
 			PostWriteService writer,
 			IdempotencyService idempotency,
 			@Value("${app.feed.default-page-size:20}") int defaultPageSize,
@@ -60,6 +63,7 @@ public class PostService {
 		this.likes = likes;
 		this.users = users;
 		this.currentUser = currentUser;
+		this.adminAccess = adminAccess;
 		this.writer = writer;
 		this.idempotency = idempotency;
 		this.defaultPageSize = defaultPageSize;
@@ -83,6 +87,18 @@ public class PostService {
 
 	public boolean delete(String postId) {
 		return writer.delete(postId);
+	}
+
+	public PostView update(String postId, String content) {
+		return writer.update(postId, content);
+	}
+
+	@Cacheable(cacheNames = "feed-version", key = "'global'")
+	@Transactional(readOnly = true)
+	public String feedVersion() {
+		return posts.findFirstByOrderByCreatedAtDescIdDesc()
+				.map(post -> post.getCreatedAt() + ":" + post.getId())
+				.orElse("empty");
 	}
 
 	@Cacheable(cacheNames = "posts", key = "#postId + ':' + #root.target.cacheViewerKey()")
@@ -115,7 +131,7 @@ public class PostService {
 	@Transactional(readOnly = true)
 	public Map<PostView, UserView> authors(List<PostView> postViews) {
 		List<UUID> ids = postViews.stream().map(PostView::authorId).map(UUID::fromString).distinct().toList();
-		Map<String, UserView> byId = users.findAllById(ids).stream().collect(Collectors.toMap(user -> user.getId().toString(), UserView::from));
+		Map<String, UserView> byId = users.findAllById(ids).stream().collect(Collectors.toMap(user -> user.getId().toString(), user -> UserView.from(user, adminAccess.roleForEmail(user.getEmail()))));
 		return postViews.stream().collect(Collectors.toMap(Function.identity(), post -> byId.get(post.authorId())));
 	}
 

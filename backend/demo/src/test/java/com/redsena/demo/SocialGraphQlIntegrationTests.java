@@ -3,13 +3,17 @@ package com.redsena.demo;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.redsena.demo.media.application.MediaService;
+import com.redsena.demo.media.infrastructure.PostMediaRepository;
 import com.redsena.demo.media.presentation.MediaUploadResponse;
 import com.redsena.demo.posts.infrastructure.PostRepository;
+import com.redsena.demo.reports.infrastructure.PostReportRepository;
 import com.redsena.demo.users.domain.UserAccount;
 import com.redsena.demo.users.infrastructure.UserAccountRepository;
 import com.redsena.demo.shared.exception.ApiException;
 import java.util.Map;
 import java.util.UUID;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -42,6 +46,12 @@ class SocialGraphQlIntegrationTests {
 	private UserAccountRepository users;
 
 	@Autowired
+	private PostReportRepository reports;
+
+	@Autowired
+	private PostMediaRepository postMedia;
+
+	@Autowired
 	private MediaService mediaService;
 
 	private String subject;
@@ -69,6 +79,21 @@ class SocialGraphQlIntegrationTests {
 
 		assertThat(retry.path("createPost.id").entity(String.class).get()).isEqualTo(firstId);
 		assertThat(posts.count()).isEqualTo(before + 1);
+	}
+
+	@Test
+	void updatesTheAuthenticatedProfileBioAndPersistsIt() {
+		GraphQlTester.Response response = graphQlTester.document(
+				"mutation { updateProfile(input: { displayName: \"  Nombre persistente  \", bio: \"  Perfil persistente  \" }) { displayName bio } }")
+				.execute();
+
+		assertThat(response.path("updateProfile.bio").entity(String.class).get()).isEqualTo("Perfil persistente");
+		assertThat(response.path("updateProfile.displayName").entity(String.class).get()).isEqualTo("Nombre persistente");
+		assertThat(users.findByFirebaseSubject(subject).orElseThrow().getBio()).isEqualTo("Perfil persistente");
+		assertThat(users.findByFirebaseSubject(subject).orElseThrow().getDisplayName()).isEqualTo("Nombre persistente");
+		GraphQlTester.Response currentProfile = graphQlTester.document("query { me { displayName bio } }").execute();
+		assertThat(currentProfile.path("me.displayName").entity(String.class).get()).isEqualTo("Nombre persistente");
+		assertThat(currentProfile.path("me.bio").entity(String.class).get()).isEqualTo("Perfil persistente");
 	}
 
 	@Test
@@ -105,6 +130,75 @@ class SocialGraphQlIntegrationTests {
 	}
 
 	@Test
+	void ownerCanUpdateAndDeletePostButAnotherUserCannot() {
+		String ownerSubject = subject;
+		String postId = withIdempotencyKey("edit-post-key").document(
+				"mutation { createPost(input: { content: \"Contenido original\" }) { id } }")
+				.execute().path("createPost.id").entity(String.class).get();
+
+		GraphQlTester.Response updated = graphQlTester.document(
+				"mutation($id: ID!, $content: String!) { updatePost(id: $id, input: { content: $content }) { id content } }")
+				.variable("id", postId)
+				.variable("content", " Contenido corregido ")
+				.execute();
+		assertThat(updated.path("updatePost.content").entity(String.class).get()).isEqualTo("Contenido corregido");
+
+		authenticateAs("post-editor-other-" + UUID.randomUUID());
+		assertGraphQlError(graphQlTester.document(
+				"mutation($id: ID!) { updatePost(id: $id, input: { content: \"Cambio ajeno\" }) { id } }")
+				.variable("id", postId).execute(), "FORBIDDEN");
+		assertGraphQlError(graphQlTester.document(
+				"mutation($id: ID!) { deletePost(id: $id) }")
+				.variable("id", postId).execute(), "FORBIDDEN");
+
+		authenticateAs(ownerSubject);
+		assertThat(graphQlTester.document("mutation($id: ID!) { deletePost(id: $id) }")
+				.variable("id", postId).execute().path("deletePost").entity(Boolean.class).get()).isTrue();
+		assertThat(posts.findById(UUID.fromString(postId))).isEmpty();
+		graphQlTester.document("query($id: ID!) { post(id: $id) { id } }")
+				.variable("id", postId).execute().path("post").valueIsNull();
+	}
+
+	@Test
+	void nonOwnerCanReportOnceAndOwnerCannotSelfReport() {
+		String ownerSubject = subject;
+		String postId = withIdempotencyKey("report-post-key").document(
+				"mutation { createPost(input: { content: \"Contenido reportable\" }) { id } }")
+				.execute().path("createPost.id").entity(String.class).get();
+		long reportsBefore = reports.count();
+
+		authenticateAs("reporter-" + UUID.randomUUID());
+		GraphQlTester.Response report = graphQlTester.document(
+				"mutation($postId: ID!) { reportPost(input: { postId: $postId, reason: SPAM }) { id reason status } }")
+				.variable("postId", postId).execute();
+		assertThat(report.path("reportPost.reason").entity(String.class).get()).isEqualTo("SPAM");
+		assertThat(report.path("reportPost.status").entity(String.class).get()).isEqualTo("OPEN");
+		assertThat(reports.count()).isEqualTo(reportsBefore + 1);
+
+		assertGraphQlError(graphQlTester.document(
+				"mutation($postId: ID!) { reportPost(input: { postId: $postId, reason: SPAM }) { id } }")
+				.variable("postId", postId).execute(), "POST_ALREADY_REPORTED");
+
+		authenticateAs(ownerSubject);
+		assertGraphQlError(graphQlTester.document(
+				"mutation($postId: ID!) { reportPost(input: { postId: $postId, reason: SPAM }) { id } }")
+				.variable("postId", postId).execute(), "POST_REPORT_OWN_POST");
+	}
+
+	@Test
+	void feedVersionChangesWhenANewPostIsCreated() {
+		String firstVersion = graphQlTester.document("query { feedVersion }").execute()
+				.path("feedVersion").entity(String.class).get();
+		withIdempotencyKey("live-feed-post-key").document(
+				"mutation { createPost(input: { content: \"Nueva publicación para el feed en vivo\" }) { id } }")
+				.execute();
+
+		String nextVersion = graphQlTester.document("query { feedVersion }").execute()
+				.path("feedVersion").entity(String.class).get();
+		assertThat(nextVersion).isNotEqualTo(firstVersion);
+	}
+
+	@Test
 	void uploadIdempotencyReplaysAndRejectsDifferentPayloads() {
 		MockMultipartFile file = new MockMultipartFile("file", "photo.png", "image/png", new byte[] { 1, 2, 3, 4 });
 		MediaUploadResponse first = mediaService.upload(file, "upload-idempotency-key");
@@ -138,10 +232,55 @@ class SocialGraphQlIntegrationTests {
 		assertThat(((java.util.List<?>) node.get("comments"))).hasSize(1);
 	}
 
+	@Test
+	void adminCanPageAndDeleteAnyPostTogetherWithItsMedia() {
+		MediaUploadResponse uploaded = mediaService.upload(
+				new MockMultipartFile("file", "admin-delete.png", "image/png", new byte[] { 5, 6, 7 }));
+		Path storedFile = Path.of("uploads").resolve(uploaded.url().substring("/media/".length()));
+		String postId = withIdempotencyKey("admin-post-key").document(
+				"mutation { createPost(input: { content: \"Publicación moderable\", mediaIds: [\"" + uploaded.id() + "\"] }) { id } }")
+				.execute().path("createPost.id").entity(String.class).get();
+		assertThat(Files.exists(storedFile)).isTrue();
+
+		authenticateAsAdmin();
+		Map<String, Object> adminPost = graphQlTester.document(
+				"query($first: Int!) { adminPosts(first: $first) { nodes { id content media { id } likeCount commentCount author { role } } pageInfo { hasNextPage endCursor } } }")
+				.variable("first", 1).execute().path("adminPosts.nodes").entityList(Map.class).get().stream()
+				.filter(item -> postId.equals(item.get("id"))).findFirst().orElseThrow();
+		assertThat(adminPost.get("content")).isEqualTo("Publicación moderable");
+
+		assertThat(graphQlTester.document("mutation($id: ID!) { adminDeletePost(id: $id) }")
+				.variable("id", postId).execute().path("adminDeletePost").entity(Boolean.class).get()).isTrue();
+		assertThat(posts.findById(UUID.fromString(postId))).isEmpty();
+		assertThat(postMedia.findById(UUID.fromString(uploaded.id()))).isEmpty();
+		assertThat(Files.exists(storedFile)).isFalse();
+	}
+
+	@Test
+	void regularUserCannotAccessAdminPostOperations() {
+		assertGraphQlError(graphQlTester.document("query { adminPosts(first: 20) { nodes { id } } }").execute(), "FORBIDDEN");
+		assertGraphQlError(graphQlTester.document("mutation { adminDeletePost(id: \"00000000-0000-0000-0000-000000000000\") }").execute(), "FORBIDDEN");
+	}
+
 	private GraphQlTester withIdempotencyKey(String key) {
 		MockHttpServletRequest request = new MockHttpServletRequest();
 		request.addHeader("Idempotency-Key", key);
 		RequestContextHolder.setRequestAttributes(new ServletRequestAttributes(request));
 		return graphQlTester;
+	}
+
+	private void authenticateAs(String nextSubject) {
+		subject = nextSubject;
+		SecurityContextHolder.getContext().setAuthentication(new TestingAuthenticationToken(subject, null, "ROLE_USER"));
+	}
+
+	private void authenticateAsAdmin() {
+		subject = "admin-" + UUID.randomUUID();
+		SecurityContextHolder.getContext().setAuthentication(new TestingAuthenticationToken(subject, null, "ROLE_ADMIN"));
+	}
+
+	private void assertGraphQlError(GraphQlTester.Response response, String code) {
+		response.errors().satisfy(errors -> assertThat(errors).anySatisfy(error ->
+				assertThat(error.getExtensions()).containsEntry("code", code)));
 	}
 }

@@ -13,6 +13,8 @@ import java.util.UUID;
 @Table(name = "users", uniqueConstraints = @UniqueConstraint(name = "uk_users_firebase_subject", columnNames = "firebase_subject"))
 public class UserAccount {
 
+	public static final String DEFAULT_BIO = "Construyendo ideas y comunidad desde RedSENA.";
+
 	@Id
 	private UUID id;
 
@@ -28,6 +30,9 @@ public class UserAccount {
 	@Column(name = "photo_url", length = 2000)
 	private String photoUrl;
 
+	@Column(nullable = false, length = 180)
+	private String bio;
+
 	@Column(name = "created_at", nullable = false, updatable = false)
 	private Instant createdAt;
 
@@ -40,6 +45,7 @@ public class UserAccount {
 		this.email = email;
 		this.displayName = displayName;
 		this.photoUrl = photoUrl;
+		this.bio = DEFAULT_BIO;
 	}
 
 	@PrePersist
@@ -53,6 +59,14 @@ public class UserAccount {
 		this.email = email;
 		this.displayName = displayName;
 		this.photoUrl = photoUrl;
+	}
+
+	public void updateBio(String bio) {
+		this.bio = bio;
+	}
+
+	public void updateDisplayName(String displayName) {
+		this.displayName = displayName;
 	}
 
 	public UUID getId() {
@@ -73,5 +87,9 @@ public class UserAccount {
 
 	public String getPhotoUrl() {
 		return photoUrl;
+	}
+
+	public String getBio() {
+		return bio;
 	}
 }

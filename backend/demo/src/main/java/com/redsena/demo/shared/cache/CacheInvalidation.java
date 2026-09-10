@@ -29,12 +29,19 @@ public class CacheInvalidation {
 
 	public void evictFeed() {
 		cacheManager.getCache("feed").clear();
+		cacheManager.getCache("feed-version").clear();
 	}
 
 	public void evictPost(String postId) {
 		// PostView contiene likedByViewer; invalidar todas las variantes evita dejar
 		// una vista de otro usuario después de una escritura.
 		cacheManager.getCache("posts").clear();
-		cacheManager.getCache("feed").clear();
+		evictFeed();
+	}
+
+	public void evictUserViews() {
+		// Los autores embebidos en posts/feed contienen displayName y photoURL.
+		cacheManager.getCache("posts").clear();
+		evictFeed();
 	}
 }

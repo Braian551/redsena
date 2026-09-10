@@ -22,6 +22,36 @@ input CreatePostInput {
   mediaIds: [ID!]
 }
 
+input UpdatePostInput {
+  content: String!
+}
+
+input ReportPostInput {
+  postId: ID!
+  reason: PostReportReason!
+}
+
+enum PostReportReason {
+  SPAM
+  HARASSMENT
+  HATE_SPEECH
+  VIOLENCE
+  SEXUAL_CONTENT
+  MISINFORMATION
+  OTHER
+}
+
+enum PostReportStatus {
+  OPEN
+}
+
+type PostReport {
+  id: ID!
+  reason: PostReportReason!
+  status: PostReportStatus!
+  createdAt: String!
+}
+
 type PostLikeResult {
   liked: Boolean!
   likeCount: Int!

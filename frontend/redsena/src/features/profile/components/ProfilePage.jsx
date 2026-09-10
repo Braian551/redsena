@@ -1,22 +1,24 @@
 import { useEffect, useMemo, useState } from 'react'
 import { UserAvatar } from '../../../components/UserAvatar.jsx'
 import { useAuth } from '../../../context/useAuth.js'
-import { getProfile, loadPosts, saveProfile } from '../../posts/model/postRepository.js'
+import { loadPosts } from '../../posts/model/postRepository.js'
+import { getLocalProfile, loadProfile, saveProfile } from '../model/profileRepository.js'
 
 function ProfilePage({ user }) {
-  const { clearProfilePhoto, setProfilePhoto } = useAuth()
-  const [profile, setProfile] = useState(() => getProfile(user))
-  const [draftBio, setDraftBio] = useState(() => getProfile(user).bio)
+  const { clearProfilePhoto, setProfilePhoto, updateDisplayName } = useAuth()
+  const [profile, setProfile] = useState(() => getLocalProfile(user))
+  const [draftDisplayName, setDraftDisplayName] = useState(() => getLocalProfile(user).displayName)
+  const [draftBio, setDraftBio] = useState(() => getLocalProfile(user).bio)
   const [posts, setPosts] = useState([])
   const [isEditing, setIsEditing] = useState(false)
   const [isSaved, setIsSaved] = useState(false)
   const [selectedPhoto, setSelectedPhoto] = useState(null)
   const [photoPreview, setPhotoPreview] = useState('')
   const [photoError, setPhotoError] = useState('')
-  const [isPhotoSaving, setIsPhotoSaving] = useState(false)
+  const [isSaving, setIsSaving] = useState(false)
 
   const userKey = user?.uid || user?.email
-  const displayName = user?.displayName || user?.email?.split('@')[0] || 'Miembro RedSENA'
+  const displayName = profile.displayName || user?.displayName || user?.email?.split('@')[0] || 'Miembro RedSENA'
   const hasCustomPhoto = Boolean(user?.photoURL && user.photoURL !== user?.googlePhotoURL)
   const userPosts = useMemo(() => posts.filter((post) => post.authorId === userKey || post.author?.email === user?.email), [posts, user?.email, userKey])
   const likesReceived = useMemo(() => userPosts.reduce((total, post) => total + (post.likeCount ?? post.likedBy?.length ?? 0), 0), [userPosts])
@@ -26,6 +28,22 @@ function ProfilePage({ user }) {
       URL.revokeObjectURL(photoPreview)
     }
   }, [photoPreview])
+
+  useEffect(() => {
+    let isActive = true
+    loadProfile(user).then((nextProfile) => {
+      if (isActive) {
+        setProfile(nextProfile)
+        setDraftDisplayName(nextProfile.displayName)
+        setDraftBio(nextProfile.bio)
+      }
+    }).catch(() => {
+      if (isActive) {
+        setProfile(getLocalProfile(user))
+      }
+    })
+    return () => { isActive = false }
+  }, [user])
 
   useEffect(() => {
     let isActive = true
@@ -62,7 +80,7 @@ function ProfilePage({ user }) {
 
   const handleUseGooglePhoto = async () => {
     setPhotoError('')
-    setIsPhotoSaving(true)
+    setIsSaving(true)
 
     try {
       await clearProfilePhoto()
@@ -71,22 +89,28 @@ function ProfilePage({ user }) {
     } catch (error) {
       setPhotoError(error.message || 'No se pudo restaurar la foto de Google.')
     } finally {
-      setIsPhotoSaving(false)
+      setIsSaving(false)
     }
   }
 
   const handleSave = async (event) => {
     event.preventDefault()
     setPhotoError('')
-    setIsPhotoSaving(Boolean(selectedPhoto))
+    setIsSaving(true)
 
     try {
+      const cleanDisplayName = draftDisplayName.trim()
+      const nextUser = cleanDisplayName === (user?.displayName || '').trim()
+        ? user
+        : await updateDisplayName(cleanDisplayName)
+
       if (selectedPhoto) {
         await setProfilePhoto(selectedPhoto)
       }
 
-      const nextProfile = saveProfile(user, { bio: draftBio })
+      const nextProfile = await saveProfile(nextUser, { displayName: cleanDisplayName, bio: draftBio })
       setProfile(nextProfile)
+      setDraftDisplayName(nextProfile.displayName)
       setDraftBio(nextProfile.bio)
       setSelectedPhoto(null)
       setPhotoPreview('')
@@ -94,13 +118,14 @@ function ProfilePage({ user }) {
       setIsSaved(true)
       window.setTimeout(() => setIsSaved(false), 2400)
     } catch (error) {
-      setPhotoError(error.message || 'No se pudo guardar tu foto. Inténtalo de nuevo.')
+      setPhotoError(error.message || 'No se pudo guardar tu perfil. Inténtalo de nuevo.')
     } finally {
-      setIsPhotoSaving(false)
+      setIsSaving(false)
     }
   }
 
   const handleCancel = () => {
+    setDraftDisplayName(profile.displayName)
     setDraftBio(profile.bio)
     setSelectedPhoto(null)
     setPhotoPreview('')
@@ -146,11 +171,15 @@ function ProfilePage({ user }) {
                     </div>
                     {photoError && <p className="mt-3 text-sm font-semibold text-red-700" role="alert">{photoError}</p>}
                     {hasCustomPhoto && !selectedPhoto && (
-                      <button className="mt-3 text-xs font-bold text-violet underline decoration-violet/30 underline-offset-4 transition hover:text-[#4c5fa7] disabled:cursor-wait disabled:opacity-60" type="button" onClick={handleUseGooglePhoto} disabled={isPhotoSaving}>
-                        {isPhotoSaving ? 'Actualizando…' : user?.googlePhotoURL ? 'Usar foto de Google' : 'Quitar foto de perfil'}
+                      <button className="mt-3 text-xs font-bold text-violet underline decoration-violet/30 underline-offset-4 transition hover:text-[#4c5fa7] disabled:cursor-wait disabled:opacity-60" type="button" onClick={handleUseGooglePhoto} disabled={isSaving}>
+                        {isSaving ? 'Actualizando…' : user?.googlePhotoURL ? 'Usar foto de Google' : 'Quitar foto de perfil'}
                       </button>
                     )}
                   </div>
+                  <label className="mt-4 grid gap-2" htmlFor="profile-display-name">
+                    <span className="text-sm font-bold text-ink">Nombre visible</span>
+                    <input id="profile-display-name" className="min-h-11 rounded-xl border border-line bg-paper px-3.5 py-3 text-sm text-ink outline-none transition placeholder:text-slate-400 focus:border-violet focus:ring-4 focus:ring-violet/10" value={draftDisplayName} onChange={(event) => setDraftDisplayName(event.target.value)} maxLength={120} required />
+                  </label>
                   <label className="grid gap-2" htmlFor="profile-bio">
                     <span className="text-sm font-bold text-ink">Tu bio</span>
                     <textarea id="profile-bio" className="min-h-24 resize-none rounded-xl border border-line bg-paper px-3.5 py-3 text-sm leading-6 text-ink outline-none transition placeholder:text-slate-400 focus:border-violet focus:ring-4 focus:ring-violet/10" value={draftBio} onChange={(event) => setDraftBio(event.target.value)} maxLength={180} />
@@ -158,8 +187,8 @@ function ProfilePage({ user }) {
                   <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
                     <span className="text-xs text-muted">{draftBio.length}/180 caracteres</span>
                     <div className="flex gap-2">
-                      <button className="min-h-10 rounded-xl px-3 text-sm font-bold text-muted transition hover:bg-paper focus-visible:outline-3 focus-visible:outline-violet/30 focus-visible:outline-offset-2 disabled:cursor-not-allowed disabled:opacity-60" type="button" onClick={handleCancel} disabled={isPhotoSaving}>Cancelar</button>
-                      <button className="min-h-10 rounded-xl bg-ink px-4 text-sm font-bold text-white transition hover:bg-[#1b2852] focus-visible:outline-3 focus-visible:outline-violet/30 focus-visible:outline-offset-2 disabled:cursor-wait disabled:opacity-60" type="submit" disabled={isPhotoSaving}>{isPhotoSaving ? 'Guardando…' : 'Guardar cambios'}</button>
+                      <button className="min-h-10 rounded-xl px-3 text-sm font-bold text-muted transition hover:bg-paper focus-visible:outline-3 focus-visible:outline-violet/30 focus-visible:outline-offset-2 disabled:cursor-not-allowed disabled:opacity-60" type="button" onClick={handleCancel} disabled={isSaving}>Cancelar</button>
+                      <button className="min-h-10 rounded-xl bg-ink px-4 text-sm font-bold text-white transition hover:bg-[#1b2852] focus-visible:outline-3 focus-visible:outline-violet/30 focus-visible:outline-offset-2 disabled:cursor-wait disabled:opacity-60" type="submit" disabled={isSaving}>{isSaving ? 'Guardando…' : 'Guardar cambios'}</button>
                     </div>
                   </div>
                 </form>

@@ -31,7 +31,9 @@ Las reglas exigen sesión, restringen cada archivo al propio `uid`, aceptan úni
 
 ## Publicaciones y perfil
 
-La vista autenticada incluye un feed responsive con creación de publicaciones, imágenes, likes explícitos y comentarios, además de un perfil con bio editable. Con `VITE_SOCIAL_BACKEND_ENABLED=true`, `src/features/posts/model/postRepository.js` usa GraphQL para el feed y mutaciones; las imágenes se cargan por multipart a `/api/uploads` y se sirven desde `/media/*`. `localStorage` solo se usa cuando la bandera está en `false`.
+La vista autenticada incluye un feed responsive con creación de publicaciones, imágenes, likes explícitos y comentarios, además de un perfil con nombre visible, bio y foto editables. Las tarjetas de publicación ocupan el ancho disponible, envuelven texto largo y organizan las imágenes en marcos 4:3 (una columna en móvil y dos desde `sm`) para evitar desbordamientos. Con `VITE_SOCIAL_BACKEND_ENABLED=true`, `src/features/profile/model/profileRepository.js` usa GraphQL para leer y guardar nombre/bio, mientras `src/features/posts/model/postRepository.js` conserva el acceso al feed y mutaciones; el nombre también se actualiza en Firebase Auth, las imágenes se cargan por multipart a `/api/uploads` y se sirven desde `/media/*`. `localStorage` solo se usa como fallback de perfil cuando la bandera está en `false`.
+
+Las cuentas con rol `ADMIN` reciben la pestaña **Administración**. El panel consulta `adminPosts(first, after)` con paginación por cursor y permite eliminar publicaciones desde una confirmación explícita; la autorización real y la eliminación de sus media ocurren en Spring Security/capa de aplicación.
 
 El cliente agrega el Firebase ID token como Bearer y usa `Idempotency-Key` en creación de posts/comentarios. La URL del endpoint queda documentada en `VITE_GRAPHQL_URL`.
 

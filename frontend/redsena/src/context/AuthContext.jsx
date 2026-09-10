@@ -51,6 +51,8 @@ const getAuthErrorMessage = (error) => {
       return 'Falta configurar Firebase Storage. Completa VITE_FIREBASE_STORAGE_BUCKET para guardar tu foto.'
     case 'profile-photo/invalid-type':
     case 'profile-photo/file-too-large':
+    case 'profile/display-name-required':
+    case 'profile/display-name-too-long':
       return error.message
     case 'storage/unauthorized':
       return 'Firebase no permite guardar esta foto. Revisa las reglas de Storage.'
@@ -218,6 +220,40 @@ function AuthProvider({ children }) {
     }
   }, [])
 
+  const updateDisplayName = useCallback(async (displayName) => {
+    setError(null)
+
+    try {
+      const currentUser = getConfiguredAuth().currentUser
+      if (!currentUser) {
+        const authenticationError = new Error('No hay una sesión activa.')
+        authenticationError.code = 'auth/no-current-user'
+        throw authenticationError
+      }
+
+      const cleanDisplayName = displayName.trim()
+      if (!cleanDisplayName) {
+        const profileError = new Error('Escribe tu nombre visible.')
+        profileError.code = 'profile/display-name-required'
+        throw profileError
+      }
+      if (cleanDisplayName.length > 120) {
+        const profileError = new Error('El nombre visible debe tener máximo 120 caracteres.')
+        profileError.code = 'profile/display-name-too-long'
+        throw profileError
+      }
+
+      await updateProfile(currentUser, { displayName: cleanDisplayName })
+      await currentUser.getIdToken(true)
+      const nextUser = toSessionUser(currentUser)
+      setUser(nextUser)
+      return nextUser
+    } catch (profileError) {
+      setError(getAuthErrorMessage(profileError))
+      throw profileError
+    }
+  }, [])
+
   const clearError = useCallback(() => setError(null), [])
 
   const value = useMemo(
@@ -232,8 +268,9 @@ function AuthProvider({ children }) {
       signOut,
       setProfilePhoto,
       clearProfilePhoto,
+      updateDisplayName,
     }),
-    [clearError, clearProfilePhoto, error, loading, registerWithEmail, setProfilePhoto, signInWithEmail, signInWithGoogle, signOut, user],
+    [clearError, clearProfilePhoto, error, loading, registerWithEmail, setProfilePhoto, signInWithEmail, signInWithGoogle, signOut, updateDisplayName, user],
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

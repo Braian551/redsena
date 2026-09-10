@@ -29,7 +29,8 @@ public class CacheConfig implements CachingConfigurer {
 				.cacheDefaults(defaults.entryTtl(Duration.ofMinutes(2)))
 				.withInitialCacheConfigurations(Map.of(
 						"posts", defaults.entryTtl(Duration.ofMinutes(2)),
-						"feed", defaults.entryTtl(Duration.ofSeconds(30))))
+						"feed", defaults.entryTtl(Duration.ofSeconds(30)),
+						"feed-version", defaults.entryTtl(Duration.ofSeconds(5))))
 				.build();
 	}
 

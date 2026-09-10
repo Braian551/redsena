@@ -5,6 +5,9 @@ import com.redsena.demo.likes.application.LikeService;
 import com.redsena.demo.likes.presentation.PostLikeResult;
 import com.redsena.demo.posts.application.CreatePostCommand;
 import com.redsena.demo.posts.application.PostService;
+import com.redsena.demo.reports.application.PostReportService;
+import com.redsena.demo.reports.presentation.PostReportView;
+import com.redsena.demo.reports.presentation.ReportPostInput;
 import com.redsena.demo.shared.exception.ApiException;
 import com.redsena.demo.users.presentation.UserView;
 import java.util.List;
@@ -22,10 +25,12 @@ public class PostGraphQlController {
 
 	private final PostService posts;
 	private final LikeService likes;
+	private final PostReportService reports;
 
-	public PostGraphQlController(PostService posts, LikeService likes) {
+	public PostGraphQlController(PostService posts, LikeService likes, PostReportService reports) {
 		this.posts = posts;
 		this.likes = likes;
+		this.reports = reports;
 	}
 
 	@QueryMapping
@@ -36,6 +41,11 @@ public class PostGraphQlController {
 	@QueryMapping
 	public com.redsena.demo.feed.presentation.PostConnection feed(@Argument Integer first, @Argument String after) {
 		return posts.feed(first, after);
+	}
+
+	@QueryMapping
+	public String feedVersion() {
+		return posts.feedVersion();
 	}
 
 	@MutationMapping
@@ -49,6 +59,19 @@ public class PostGraphQlController {
 	@MutationMapping
 	public boolean deletePost(@Argument String id) {
 		return posts.delete(id);
+	}
+
+	@MutationMapping
+	public PostView updatePost(@Argument String id, @Argument UpdatePostInput input) {
+		if (input == null) {
+			throw new ApiException("POST_INPUT_REQUIRED", "La información de la publicación es obligatoria.");
+		}
+		return posts.update(id, input.content());
+	}
+
+	@MutationMapping
+	public PostReportView reportPost(@Argument ReportPostInput input) {
+		return reports.report(input);
 	}
 
 	@MutationMapping

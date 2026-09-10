@@ -1,8 +1,10 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import './App.css'
 import { useAuth } from './context/useAuth.js'
 import { FeedPage } from './features/posts/components/FeedPage.jsx'
 import { ProfilePage } from './features/profile/components/ProfilePage.jsx'
+import { AdminDashboard } from './features/admin/components/AdminDashboard.jsx'
+import { loadCurrentUser } from './features/admin/model/adminRepository.js'
 
 function BrandMark() {
   return (
@@ -325,7 +327,23 @@ function UserAvatar({ user }) {
 function Dashboard({ user, onSignOut }) {
   const [isSigningOut, setIsSigningOut] = useState(false)
   const [activeView, setActiveView] = useState('feed')
+  const [backendUser, setBackendUser] = useState(null)
   const displayName = user.displayName || user.email?.split('@')[0] || 'amigo'
+
+  useEffect(() => {
+    let isActive = true
+    loadCurrentUser(user)
+      .then((nextUser) => {
+        if (isActive) setBackendUser(nextUser)
+      })
+      .catch(() => {
+        if (isActive) setBackendUser(null)
+      })
+    return () => { isActive = false }
+  }, [user])
+
+  const isAdmin = backendUser?.role === 'ADMIN'
+  const selectView = (view) => setActiveView(view === 'admin' && !isAdmin ? 'feed' : view)
 
   const handleSignOut = async () => {
     setIsSigningOut(true)
@@ -348,7 +366,7 @@ function Dashboard({ user, onSignOut }) {
             <button
               className={`rounded-lg px-3 py-2 text-xs font-bold transition focus-visible:outline-3 focus-visible:outline-violet/30 focus-visible:outline-offset-2 ${activeView === 'feed' ? 'bg-ink text-white' : 'text-muted hover:bg-paper hover:text-ink'}`}
               type="button"
-              onClick={() => setActiveView('feed')}
+              onClick={() => selectView('feed')}
               aria-current={activeView === 'feed' ? 'page' : undefined}
             >
               Inicio
@@ -356,11 +374,17 @@ function Dashboard({ user, onSignOut }) {
             <button
               className={`rounded-lg px-3 py-2 text-xs font-bold transition focus-visible:outline-3 focus-visible:outline-violet/30 focus-visible:outline-offset-2 ${activeView === 'profile' ? 'bg-ink text-white' : 'text-muted hover:bg-paper hover:text-ink'}`}
               type="button"
-              onClick={() => setActiveView('profile')}
+              onClick={() => selectView('profile')}
               aria-current={activeView === 'profile' ? 'page' : undefined}
             >
               Mi perfil
             </button>
+            {isAdmin && <button
+              className={`rounded-lg px-3 py-2 text-xs font-bold transition focus-visible:outline-3 focus-visible:outline-violet/30 focus-visible:outline-offset-2 ${activeView === 'admin' ? 'bg-ink text-white' : 'text-muted hover:bg-paper hover:text-ink'}`}
+              type="button"
+              onClick={() => selectView('admin')}
+              aria-current={activeView === 'admin' ? 'page' : undefined}
+            >Administración</button>}
           </div>
           <div className="hidden text-right sm:block">
             <strong className="block text-sm">{displayName}</strong>
@@ -380,12 +404,13 @@ function Dashboard({ user, onSignOut }) {
 
       <div className="sm:hidden">
         <div className="mx-auto flex max-w-7xl gap-2 px-5 pt-5" role="tablist" aria-label="Secciones de RedSENA">
-          <button className={`flex-1 rounded-xl px-3 py-2.5 text-sm font-bold transition ${activeView === 'feed' ? 'bg-ink text-white' : 'bg-white text-muted'}`} type="button" onClick={() => setActiveView('feed')} aria-selected={activeView === 'feed'} role="tab">Inicio</button>
-          <button className={`flex-1 rounded-xl px-3 py-2.5 text-sm font-bold transition ${activeView === 'profile' ? 'bg-ink text-white' : 'bg-white text-muted'}`} type="button" onClick={() => setActiveView('profile')} aria-selected={activeView === 'profile'} role="tab">Mi perfil</button>
+          <button className={`flex-1 rounded-xl px-3 py-2.5 text-sm font-bold transition ${activeView === 'feed' ? 'bg-ink text-white' : 'bg-white text-muted'}`} type="button" onClick={() => selectView('feed')} aria-selected={activeView === 'feed'} role="tab">Inicio</button>
+          <button className={`flex-1 rounded-xl px-3 py-2.5 text-sm font-bold transition ${activeView === 'profile' ? 'bg-ink text-white' : 'bg-white text-muted'}`} type="button" onClick={() => selectView('profile')} aria-selected={activeView === 'profile'} role="tab">Mi perfil</button>
+          {isAdmin && <button className={`flex-1 rounded-xl px-3 py-2.5 text-sm font-bold transition ${activeView === 'admin' ? 'bg-ink text-white' : 'bg-white text-muted'}`} type="button" onClick={() => selectView('admin')} aria-selected={activeView === 'admin'} role="tab">Admin</button>}
         </div>
       </div>
 
-      {activeView === 'feed' ? <FeedPage user={user} /> : <ProfilePage user={user} />}
+      {activeView === 'feed' ? <FeedPage user={user} /> : activeView === 'profile' ? <ProfilePage user={user} /> : <AdminDashboard user={user} />}
     </main>
   )
 }

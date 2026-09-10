@@ -93,7 +93,7 @@ redsena/
 └── CLAUDE.md
 ```
 
-Estado validado en septiembre de 2026: el backend mantiene el monolito modular Spring Boot con PostgreSQL/Flyway, Redis para caché e idempotencia, GraphQL, seguridad Bearer/Firebase opcional, uploads multipart y Actuator. El frontend React/Vite consume el feed GraphQL después del registro/login Firebase, crea posts con imágenes, usa likes explícitos y se empaqueta en Nginx. El Compose integrado orquesta backend, frontend, media, Nginx, PostgreSQL y Redis con red, health checks y volumen persistente de uploads. El caché de vistas que contiene `likedByViewer` se separa por el `sub` autenticado.
+Estado validado en septiembre de 2026: el backend mantiene el monolito modular Spring Boot con PostgreSQL/Flyway, Redis para caché e idempotencia, GraphQL, seguridad Bearer/Firebase opcional, uploads multipart y Actuator. El frontend React/Vite consume el feed GraphQL después del registro/login Firebase, crea posts con imágenes, usa likes explícitos y se empaqueta en Nginx. El Compose integrado orquesta backend, frontend, media, Nginx, PostgreSQL y Redis con red, health checks y volumen persistente de uploads. El caché de vistas que contiene `likedByViewer` se separa por el `sub` autenticado. El dashboard de administración usa rol backend `ADMIN`, paginación keyset, consultas batch y borrado post-commit de archivos asociados; la allowlist de correo se inyecta mediante `ADMIN_EMAILS` y no se hardcodea.
 
 Patrones aplicados con beneficio concreto: `MediaStorage` usa Strategy para desacoplar almacenamiento local de futuros object stores; repositorios encapsulan persistencia; caché-aside, idempotencia y operaciones explícitas de estado protegen las escrituras. No se agregan patrones GoF ni capas vacías por anticipación.
 

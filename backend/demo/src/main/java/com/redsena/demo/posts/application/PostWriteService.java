@@ -27,6 +27,8 @@ public class PostWriteService {
 	private final CurrentUserService currentUser;
 	private final RateLimitService rateLimit;
 	private final CacheInvalidation cacheInvalidation;
+	private final PostActionAuthorizer authorizer;
+	private final PostDeletionService deletion;
 	private final int postCreateLimit;
 
 	public PostWriteService(
@@ -35,12 +37,16 @@ public class PostWriteService {
 			CurrentUserService currentUser,
 			RateLimitService rateLimit,
 			CacheInvalidation cacheInvalidation,
+			PostActionAuthorizer authorizer,
+			PostDeletionService deletion,
 			@Value("${app.rate-limit.post-create:10}") int postCreateLimit) {
 		this.posts = posts;
 		this.media = media;
 		this.currentUser = currentUser;
 		this.rateLimit = rateLimit;
 		this.cacheInvalidation = cacheInvalidation;
+		this.authorizer = authorizer;
+		this.deletion = deletion;
 		this.postCreateLimit = postCreateLimit;
 	}
 
@@ -70,15 +76,25 @@ public class PostWriteService {
 	}
 
 	@Transactional
-	public boolean delete(String postId) {
+	public PostView update(String postId, String content) {
+		if (content == null || content.isBlank()) {
+			throw new ApiException("POST_CONTENT_REQUIRED", "Escribe algo antes de guardar los cambios.");
+		}
+		String cleanContent = content.trim();
+		if (cleanContent.length() > 500) {
+			throw new ApiException("POST_CONTENT_TOO_LONG", "La publicación no puede superar 500 caracteres.");
+		}
 		UUID id = parsePostId(postId);
 		Post post = posts.findById(id).orElseThrow(() -> new ApiException("POST_NOT_FOUND", "La publicación no existe."));
-		if (!post.getAuthor().getId().equals(currentUser.requireUser().getId())) {
-			throw new ApiException("FORBIDDEN", "No tienes permiso para eliminar esta publicación.");
-		}
-		posts.delete(post);
+		authorizer.authorize(PostAction.UPDATE, post, currentUser.requireUser());
+		post.updateContent(cleanContent);
 		cacheInvalidation.afterCommit(() -> cacheInvalidation.evictPost(postId));
-		return true;
+		return PostView.from(post, media.findByPostIdOrderByPositionAsc(id));
+	}
+
+	@Transactional
+	public boolean delete(String postId) {
+		return deletion.deleteOwned(postId, currentUser.requireUser());
 	}
 
 	private void validate(CreatePostCommand command) {

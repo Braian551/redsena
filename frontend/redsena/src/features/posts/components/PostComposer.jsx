@@ -55,14 +55,14 @@ function PostComposer({ user, onSubmit }) {
   }
 
   return (
-    <form className="rounded-[24px] border border-line bg-white p-5 shadow-[0_16px_40px_rgba(38,55,102,0.06)] sm:p-6" onSubmit={handleSubmit}>
+    <form className="w-full min-w-0 max-w-full overflow-hidden rounded-[24px] border border-line bg-white p-5 shadow-[0_16px_40px_rgba(38,55,102,0.06)] sm:p-6" onSubmit={handleSubmit}>
       <div className="flex items-start gap-3">
         <UserAvatar user={user} className="size-11 shrink-0" label="Tu avatar" />
         <div className="min-w-0 flex-1">
           <label className="sr-only" htmlFor="post-content">¿Qué quieres compartir?</label>
           <textarea
             id="post-content"
-            className="min-h-24 w-full resize-none border-0 bg-transparent px-0 py-1 text-[16px] leading-7 text-ink outline-none placeholder:text-slate-400"
+            className="min-h-24 w-full max-w-full resize-none border-0 bg-transparent px-0 py-1 text-[16px] leading-7 text-ink outline-none placeholder:text-slate-400"
             value={content}
             onChange={(event) => {
               setContent(event.target.value)
@@ -84,8 +84,8 @@ function PostComposer({ user, onSubmit }) {
             <span aria-hidden="true">▧</span> Imagen
             <input id="post-media" className="sr-only" type="file" accept="image/jpeg,image/png,image/webp" multiple onChange={handleFiles} />
           </label>
-          {files.length > 0 && <span className="max-w-[180px] truncate text-xs text-muted" title={files.map((file) => file.name).join(', ')}>{files.length} imagen{files.length > 1 ? 'es' : ''} seleccionada{files.length > 1 ? 's' : ''}</span>}
-          {error && <p className="text-xs font-semibold text-red-700" role="alert">{error}</p>}
+          {files.length > 0 && <span className="max-w-[180px] min-w-0 truncate text-xs text-muted" title={files.map((file) => file.name).join(', ')}>{files.length} imagen{files.length > 1 ? 'es' : ''} seleccionada{files.length > 1 ? 's' : ''}</span>}
+          {error && <p className="min-w-0 break-words text-xs font-semibold text-red-700" role="alert">{error}</p>}
           <button
             className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl bg-ink px-4 text-sm font-bold text-white transition hover:-translate-y-0.5 hover:bg-[#1b2852] focus-visible:outline-3 focus-visible:outline-violet/30 focus-visible:outline-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
             type="submit"

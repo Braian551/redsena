@@ -6,11 +6,12 @@ RedSENA es una red social en evolución para publicaciones e interacción entre 
 
 - Backend: Spring Boot 4.1.1 con migraciones Flyway, usuarios sincronizados desde el `sub` autenticado, posts, media, comentarios, likes, GraphQL, caché/idempotencia/rate limit Redis y Actuator.
 - Frontend: React/Vite con login y registro mediante Firebase Email/Password, acceso Google, persistencia de sesión y cierre de sesión; al autenticarse consume el feed y las mutaciones sociales por GraphQL con Bearer.
-- Perfil: foto de Google por defecto y foto propia opcional en Firebase Storage, con reglas versionadas y reflejo del avatar en Posts.
+- Perfil: foto de Google por defecto y foto propia opcional en Firebase Storage, con reglas versionadas; el nombre visible se sincroniza con Firebase Auth y nombre/bio se persisten en PostgreSQL mediante GraphQL cuando el backend social está activo.
+- Administración: dashboard Tailwind protegido por el rol `ADMIN`, con publicaciones paginadas por cursor, autores/contadores cargados en batch y eliminación transaccional de posts, asociaciones y archivos del volumen de uploads. El rol se resuelve en backend mediante `ADMIN_EMAILS` o claims/autoridades administrativas; el frontend no autoriza por correo.
 - Compose: `backend/demo/compose.yaml` orquesta PostgreSQL 16, Redis 7.4, backend, frontend Nginx, media Nginx y reverse proxy Nginx, con red, health checks y volúmenes de PostgreSQL/uploads.
 - El feed usa paginación keyset (`created_at DESC, id DESC`) y `@BatchMapping` para autores, contadores, likes del lector y comentarios, evitando N+1 evidente. Las variantes cacheadas incluyen el `sub` autenticado porque `likedByViewer` es específico de la sesión.
 - Vitest/React Testing Library/Playwright aún no están declarados; el frontend se valida con los scripts reales `npm run lint` y `npm run build`.
-- Despliegue: existe un módulo aislado en [`deploy/`](deploy/), documentado en [`dos/deployment-ubuntu-ssh.md`](dos/deployment-ubuntu-ssh.md). En la VPS compartida usa `172.17.0.1:18080`; el edge existente publica `redsena.online` sin alterar las rutas de Angelow.
+- Despliegue: existe un módulo aislado en [`deploy/`](deploy/), documentado en [`dos/deployment-ubuntu-ssh.md`](dos/deployment-ubuntu-ssh.md) y respaldado por la [`investigación de despliegue`](dos/deployment-research.md). En la VPS compartida usa `172.17.0.1:18080`; el edge existente publica `redsena.online` sin alterar las rutas de Angelow.
 
 No asumir que una capacidad de la arquitectura objetivo ya está disponible solo porque aparece documentada.
 
@@ -42,7 +43,12 @@ Las versiones del `pom.xml`, `package.json` y lockfiles son la fuente concreta. 
 │   ├── redsena-testing/
 │   └── redsena-sdd/
 ├── .agents/specs/
-│   └── 001-login-specs/
+│   ├── 001-login-specs/
+│   │   ├── spec.md
+│   │   ├── plan.md
+│   │   └── task.md
+│   ├── 002-editprofile-specs/
+│   └── 006-responsive-specs/
 │       ├── spec.md
 │       ├── plan.md
 │       └── task.md
@@ -109,6 +115,8 @@ npm run dev
 
 Antes de iniciar, copia `frontend/redsena/.env.example` como `.env.local` y completa la configuración Web de Firebase, incluido `VITE_FIREBASE_STORAGE_BUCKET`. En Firebase Console habilita los proveedores Email/Password, Google y Storage, y autoriza el dominio local. Para desarrollo con Vite, el proxy apunta al backend en `localhost:8080`; usa el Compose integrado si necesitas servir media.
 
+Para habilitar administradores en el backend, define `ADMIN_EMAILS` como una lista separada por comas. En producción se configura únicamente en `deploy/.env.production`; no se guarda en el repositorio ni se usa como una decisión de autorización en React.
+
 Comprobaciones disponibles actualmente:
 
 ```bash
@@ -156,14 +164,18 @@ Los skills locales están separados por responsabilidad para mantener las tareas
 5. Ampliar cobertura de frontend y E2E con Vitest/RTL/Playwright. **Pendiente.**
 6. Despliegue productivo con secretos, HTTPS del edge compartido y smoke público. **Validado en `https://redsena.online` el 10-sep-2026**; queda pendiente el smoke autenticado manual con una cuenta real y la sustitución opcional del volumen local por object storage.
 
+7. Edición de perfil con nombre visible y bio persistentes en PostgreSQL. **Implementado en la Spec 002**; Firebase Auth conserva la identidad visible y Firebase Storage continúa siendo el proveedor de la foto.
+8. Dashboard de administración para moderar posts y sus media. **Implementado**; incluye rol backend, cursor keyset, consultas batch y limpieza post-commit del volumen. La gestión de usuarios, seguimiento y reportes administrativos queda fuera de este corte.
+9. Publicaciones responsive con wrap seguro, marcos 4:3 y grilla adaptativa. **Implementado en la Spec 006**; queda pendiente el smoke visual autenticado con datos extremos.
+
 Cada etapa debe conservar el alcance pequeño, probar el flujo vertical y documentar lo que realmente quedó implementado.
 
 ## Flujo SDD
 
-La capacidad 001 se mantiene como artefactos Markdown trazables:
+Las capacidades se mantienen como artefactos Markdown trazables:
 
 ```text
 spec.md → plan.md → task.md → implementación → verificación
 ```
 
-El skill reutilizable está en [`.agents/skills/redsena-sdd/SKILL.md`](.agents/skills/redsena-sdd/SKILL.md). La spec completa, incluidos requisitos funcionales, no funcionales, aceptación y pendientes, está en [`001-login-specs/spec.md`](.agents/specs/001-login-specs/spec.md).
+El skill reutilizable está en [`.agents/skills/redsena-sdd/SKILL.md`](.agents/skills/redsena-sdd/SKILL.md). Las specs completas están en [`001-login-specs/spec.md`](.agents/specs/001-login-specs/spec.md), [`002-editprofile-specs/spec.md`](.agents/specs/002-editprofile-specs/spec.md) y [`006-responsive-specs/spec.md`](.agents/specs/006-responsive-specs/spec.md).
