@@ -1,0 +1,460 @@
+```gitignore
+# ============================================================
+# RedSENA - .gitignore
+# Spring Boot + React/Vite + Docker + Redis + PostgreSQL
+# Firebase + Uploads + Logs
+# ============================================================
+
+
+# ============================================================
+# ENVIRONMENT / SECRETS
+# ============================================================
+
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+.env.*.local
+
+# Permitir archivos de ejemplo
+!.env.example
+!.env.*.example
+
+
+# ============================================================
+# FIREBASE
+# ============================================================
+
+# Firebase Admin SDK - CREDENCIALES PRIVADAS
+**/firebase-service-account.json
+**/firebase-adminsdk.json
+**/firebase-admin-sdk.json
+**/serviceAccountKey.json
+**/service-account.json
+**/service-account-key.json
+
+# Cualquier variante de Service Account generada por Firebase
+**/*firebase-adminsdk-*.json
+**/*service-account*.json
+**/*serviceAccount*.json
+
+# Directorio privado de credenciales
+credentials/
+**/credentials/
+secrets/
+**/secrets/
+
+# Firebase CLI
+.firebase/
+**/.firebase/
+
+firebase-debug.log
+firebase-debug.*.log
+ui-debug.log
+
+# Configuración Firebase local privada, si se utiliza
+.firebaseconfig
+.firebaserc.local
+
+# Firebase Emulator
+firebase-export/
+**/firebase-export/
+
+# Si google-services.json se maneja como archivo privado en este proyecto
+google-services.json
+**/google-services.json
+
+# Google Service Account genérico
+application_default_credentials.json
+**/application_default_credentials.json
+
+
+# ============================================================
+# PRIVATE KEYS / CERTIFICATES / TOKENS
+# ============================================================
+
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+*.keystore
+
+*.crt
+*.cer
+
+*.token
+*.secret
+*.secrets
+
+private/
+**/private/
+
+
+# ============================================================
+# SPRING BOOT / JAVA / MAVEN
+# ============================================================
+
+target/
+**/target/
+
+*.class
+
+# Maven
+.mvn/timing.properties
+
+# Mantener Maven Wrapper
+!**/.mvn/wrapper/
+!**/.mvn/wrapper/maven-wrapper.properties
+!**/mvnw
+!**/mvnw.cmd
+
+# Spring Boot local configuration
+application-local.properties
+application-local.yml
+application-local.yaml
+
+**/application-local.properties
+**/application-local.yml
+**/application-local.yaml
+
+# Overrides privados
+application-secret.properties
+application-secrets.properties
+application-secret.yml
+application-secrets.yml
+
+**/application-secret.properties
+**/application-secrets.properties
+**/application-secret.yml
+**/application-secrets.yml
+
+
+# ============================================================
+# NODE / REACT / VITE
+# ============================================================
+
+node_modules/
+**/node_modules/
+
+dist/
+**/dist/
+
+build/
+**/build/
+
+.vite/
+**/.vite/
+
+.vite-inspect/
+**/.vite-inspect/
+
+.eslintcache
+
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+*.tsbuildinfo
+
+
+# ============================================================
+# TESTING
+# ============================================================
+
+coverage/
+**/coverage/
+
+.nyc_output/
+**/.nyc_output/
+
+test-results/
+**/test-results/
+
+playwright-report/
+**/playwright-report/
+
+blob-report/
+**/blob-report/
+
+playwright/.cache/
+**/playwright/.cache/
+
+# Screenshots/videos generados por tests
+**/test-results/**/*.png
+**/test-results/**/*.webm
+**/test-results/**/*.zip
+
+
+# ============================================================
+# UPLOADS / USER MEDIA
+# ============================================================
+
+uploads/
+**/uploads/
+
+media/
+**/media/
+
+storage/uploads/
+**/storage/uploads/
+
+storage/media/
+**/storage/media/
+
+# Archivos temporales de procesamiento multimedia
+tmp/
+**/tmp/
+
+temp/
+**/temp/
+
+
+# ============================================================
+# LOGS
+# ============================================================
+
+logs/
+**/logs/
+
+*.log
+*.log.*
+
+log/
+**/log/
+
+# Heap dumps
+*.hprof
+
+# JVM crash logs
+hs_err_pid*
+replay_pid*
+
+
+# ============================================================
+# DOCKER LOCAL DATA
+# ============================================================
+
+docker-data/
+**/docker-data/
+
+.docker-data/
+**/.docker-data/
+
+postgres-data/
+**/postgres-data/
+
+postgres_data/
+**/postgres_data/
+
+redis-data/
+**/redis-data/
+
+redis_data/
+**/redis_data/
+
+db-data/
+**/db-data/
+
+# Docker Compose override exclusivamente local
+compose.override.yaml
+compose.override.yml
+docker-compose.override.yml
+docker-compose.override.yaml
+
+# Mantener ejemplos si existen
+!compose.override.example.yaml
+!compose.override.example.yml
+!docker-compose.override.example.yml
+
+
+# ============================================================
+# DATABASE LOCAL FILES
+# ============================================================
+
+*.db
+*.sqlite
+*.sqlite3
+
+*.dump
+*.sql.gz
+
+# Backups
+backups/
+**/backups/
+
+*.bak
+*.backup
+
+
+# ============================================================
+# REDIS LOCAL
+# ============================================================
+
+dump.rdb
+**/dump.rdb
+
+appendonly.aof
+**/appendonly.aof
+
+appendonlydir/
+**/appendonlydir/
+
+
+# ============================================================
+# IDE - INTELLIJ IDEA
+# ============================================================
+
+.idea/
+**/.idea/
+
+*.iml
+*.ipr
+*.iws
+
+out/
+**/out/
+
+
+# ============================================================
+# IDE - VS CODE
+# ============================================================
+
+.vscode/
+**/.vscode/
+
+# Permitir configuraciones compartidas si posteriormente se necesitan
+# !.vscode/settings.json
+# !.vscode/extensions.json
+
+
+# ============================================================
+# ECLIPSE / SPRING TOOL SUITE
+# ============================================================
+
+.classpath
+.project
+.settings/
+.springBeans
+.sts4-cache/
+
+
+# ============================================================
+# NETBEANS
+# ============================================================
+
+nbproject/private/
+build/
+nbbuild/
+dist/
+nbdist/
+.nb-gradle/
+
+
+# ============================================================
+# OPERATING SYSTEM
+# ============================================================
+
+# Windows
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+Desktop.ini
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Linux
+*~
+.directory
+
+
+# ============================================================
+# TEMPORARY / EDITOR FILES
+# ============================================================
+
+*.tmp
+*.temp
+*.swp
+*.swo
+*.bak
+*.orig
+*.rej
+
+*~
+.~lock.*#
+
+
+# ============================================================
+# ARCHIVES / GENERATED FILES
+# ============================================================
+
+*.zip
+*.tar
+*.tar.gz
+*.tgz
+*.rar
+*.7z
+
+
+# ============================================================
+# LOCAL CACHE
+# ============================================================
+
+.cache/
+**/.cache/
+
+.cache-loader/
+**/.cache-loader/
+
+
+# ============================================================
+# REDSENA LOCAL DEVELOPMENT
+# ============================================================
+
+.local/
+**/.local/
+
+runtime/
+**/runtime/
+
+data/local/
+**/data/local/
+
+# Credenciales privadas específicas de RedSENA
+redsena-credentials.json
+redsena-secrets.json
+redsena-firebase.json
+
+**/redsena-credentials.json
+**/redsena-secrets.json
+**/redsena-firebase.json
+
+
+# ============================================================
+# DO NOT IGNORE PROJECT CONFIGURATION
+# ============================================================
+
+!AGENTS.md
+!CLAUDE.md
+
+!**/pom.xml
+!**/package.json
+!**/package-lock.json
+
+!**/compose.yaml
+!**/compose.yml
+!**/docker-compose.yml
+!**/docker-compose.yaml
+
+!**/Dockerfile
+!**/.dockerignore
+
+!**/application.properties
+!**/application.yml
+!**/application.yaml
+```
